@@ -19,31 +19,6 @@
             <p>We believe in leveraging technology to make healthcare more accessible and efficient.</p>
             <p>Your health is our journey together.</p>
         </section>
-
-        <section id="login-form">
-            <h2>Login to Your Portal</h2>
-            <form action="" method="post">
-                <div>
-                    <label for="email">Email:</label>
-                    <input type="email" id="email" name="email" required>
-                </div>
-                <div>
-                    <label for="password">Password:</label>
-                    <input type="password" id="password" name="password" required>
-                </div>
-                <div>
-                    <label for="role">I am a:</label>
-                    <select id="role" name="role" required>
-                        <option value="">-- Select Role --</option>
-                        <option value="patient">Patient</option>
-                        <option value="doctor">Doctor</option>
-                        <option value="staff">Staff</option>
-                    </select>
-                </div>
-                <button type="submit">Login</button>
-            </form>
-            <p>Don't have an account? <a href="register.php">Register as a patient here.</a></p>
-        </section>
     </main>
 
     <footer>
