@@ -16,8 +16,7 @@
         <nav>
             <ul>
                 <li><a href="doctor_dashboard.php">Dashboard</a></li>
-                <li><a href="my_schedule.php">My Schedule</a></li>
-                <li><a href="appointment_management.php">Appointments</a></li>
+                <li><a href="doctor_calendar.php">My Calendar</a></li>
                 <li><a href="patient_list.php">Patient List</a></li>
             </ul>
         </nav>
