@@ -559,37 +559,36 @@
         </div>
     </div>
 
-    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Prevent past dates
+            
             const dateInput = document.getElementById('date');
             dateInput.min = new Date().toISOString().split('T')[0];
             
-            // Handle form submission with Bootstrap enhancements
+            
             document.getElementById('appointmentForm').addEventListener('submit', function(e) {
                 e.preventDefault();
                 
-                // Show loading indicator
+                
                 document.getElementById('loadingIndicator').classList.remove('d-none');
                 
-                // Simulate server processing
+                
                 setTimeout(function() {
-                    // Hide loading indicator
+                    
                     document.getElementById('loadingIndicator').classList.add('d-none');
                     
-                    // Show success message
+                   
                     document.getElementById('successMessage').classList.remove('d-none');
                     
-                    // Reset form
+                    
                     e.target.reset();
                     
-                    // Scroll to top
+                   
                     window.scrollTo(0, 0);
                     
-                    // Hide success message after 5 seconds
+                   
                     setTimeout(function() {
                         document.getElementById('successMessage').classList.add('d-none');
                     }, 5000);
