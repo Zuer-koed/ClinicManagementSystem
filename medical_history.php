@@ -3,68 +3,308 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Patient Dashboard - My Profile</title>
+    <title> Nexus Care - Medical History </title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f0f8ff;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        header {
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px 0;
+        }
+        
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            flex-wrap: wrap;
+        }
+        
+        .logo {
+            height: 180px;
+            width: 180px;
+        }
+        
+        .welcome-section {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .welcome-message {
+            text-align: right;
+        }
+        
+        .welcome-message h1 {
+            font-size: 28px;
+            color: #4d93c2ff;
+            margin-bottom: 5px;
+        }
+        
+        .welcome-message p {
+            color: #666;
+            font-size: 16px;
+        }
+        
+        .logout-link {
+            color: #ff6b6b;
+            text-decoration: none;
+            font-weight: 600;
+            padding: 10px 20px;
+            border: 1px solid #ff6b6b;
+            border-radius: 4px;
+            transition: all 0.3s;
+            font-size: 16px;
+        }
+        
+        .logout-link:hover {
+            background-color: #ff6b6b;
+            color: white;
+        }
+        
+        nav {
+            width: 100%;
+            margin-top: 20px;
+            background-color: #4d93c2ff;
+            border-radius: 6px;
+        }
+        
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        nav ul {
+            display: flex;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        
+        nav li {
+            flex: 1;
+            text-align: center;
+        }
+        
+        nav a {
+            display: block;
+            color: white;
+            text-decoration: none;
+            padding: 16px 10px;
+            transition: background-color 0.3s;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        nav a:hover, nav a.active {
+            background-color: #1d5a8a;
+        }
+        
+        main {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+        
+        .page-title {
+            color: #4d93c2ff;
+            font-size: 32px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .history-section {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .section-title {
+            background-color: #f0f8ff;
+            padding: 15px;
+            margin: -30px -30px 25px -30px;
+            border-radius: 8px 8px 0 0;
+            text-align: center;
+            font-size: 22px;
+            color: #4d93c2ff;
+        }
+        
+        .medical-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        .medical-table th, .medical-table td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+            vertical-align: top;
+        }
+        
+        .medical-table th {
+            background-color: #f0f8ff;
+            color: #4d93c2ff;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+        
+        .medical-table tr:hover {
+            background-color: #f9f9f9;
+        }
+        
+        .empty-row {
+            color: #999;
+            font-style: italic;
+            text-align: center;
+        }
+        
+        .notes-cell {
+            max-width: 300px;
+            word-wrap: break-word;
+        }
+        
+        footer {
+            background-color: #1d4159ff;
+            color: white;
+            text-align: center;
+            padding: 30px 0;
+            margin-top: 50px;
+        }
+        
+        .footer-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        footer p {
+            color: white;
+            font-size: 16px;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            nav ul {
+                flex-direction: column;
+            }
+            
+            .header-container {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .welcome-section {
+                flex-direction: column;
+                margin-top: 20px;
+                gap: 15px;
+            }
+            
+            .welcome-message {
+                text-align: center;
+            }
+            
+            nav a {
+                padding: 14px 8px;
+                font-size: 15px;
+            }
+            
+            .medical-table {
+                display: block;
+                overflow-x: auto;
+            }
+            
+            .medical-table th, .medical-table td {
+                padding: 10px 8px;
+                font-size: 14px;
+            }
+            
+            .notes-cell {
+                max-width: 200px;
+            }
+        }
+    </style>
 </head>
 <body>
-    
-    <nav>
-        <ul>
-            <li><a href="patient_dashboard.php">Dashboard</a></li>
-            <li><a href="my_appointments.php">My Appointments</a></li>
-            <li><a href="book_appointment.php">Book Appointment</a></li>
-            <li><a href="my_profile.php">My Profile</a></li>
-            <li><a href="medical_history.php">Medical History</a></li>
-            <li><a href="logout.php">Logout</a></li>
-        </ul>
-    </nav>
- <section id="history">
-            <h2>Medical History</h2>
-            <table border="1" cellpadding="10" cellspacing="0" width="100%">
+    <header>
+        <div class="header-container">
+            <img src="Logo.png" alt="Nexus Care Clinic Logo" class="logo">
+            <div class="welcome-section">
+                <div class="welcome-message">
+                    <h1>Medical History</h1>
+                    <p>Welcome, [Patient Name]!</p>
+                </div>
+                <a href="logout.php" class="logout-link">Logout</a>
+            </div>
+            
+            <nav>
+                <div class="nav-container">
+                    <ul>
+                        <li><a href="patient_dashboard.php">Dashboard</a></li>
+                        <li><a href="my_appointment.php">My Appointments</a></li>
+                        <li><a href="book_appointment.php">Book Appointment</a></li>
+                        <li><a href="patient_profile.php">My Profile</a></li>
+                        <li><a href="medical_history.php" class="active">Medical History</a></li>
+                    </ul>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <h1 class="page-title">Medical History</h1>
+        
+        <div class="history-section">
+            <h2 class="section-title">Treatment Records</h2>
+            
+            <table class="medical-table">
                 <thead>
                     <tr>
                         <th>Date</th>
                         <th>Doctor Seen</th>
                         <th>Diagnosis</th>
                         <th>Prescribed Medications</th>
-                        <th>Doctor's Notes</th>
+                        <th class="notes-cell">Doctor's Notes</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
                         <td>October 15, 2023</td>
-                        <td>Dr. Hanami</td>
+                        <td>Dr. Hajimi</td>
                         <td>Seasonal allergies</td>
                         <td>Loratadine 10mg, once daily</td>
-                        <td>Patient presented with watery eyes, sneezing, and nasal congestion. Symptoms consistent with seasonal allergies. Recommended over-the-counter antihistamine and nasal spray.</td>
+                        <td class="notes-cell">Patient presented with watery eyes, sneezing, and nasal congestion. Symptoms consistent with seasonal allergies. Recommended over-the-counter antihistamine and nasal spray.</td>
                     </tr>
-                    <tr>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                    </tr>
-                    <tr>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                    </tr>
-                    <tr>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
+                    <tr class="empty-row">
+                        <td colspan="5">No additional medical records available</td>
                     </tr>
                 </tbody>
             </table>
-        </section>
+        </div>
     </main>
-     <footer>
-    <p>&copy; 2024 City Clinic. All rights reserved.</p>
-  </footer>
 
+    <footer>
+        <div class="footer-container">
+            <p>&copy; 2025 Nexus Care. All rights reserved.</p>
+        </div>
+    </footer>
 </body>
 </html>
