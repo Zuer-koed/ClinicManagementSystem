@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> Nexus Care - Medical History </title>
+    <title>Nexus Care - Medical History</title>
     <style>
         * {
             margin: 0;
@@ -182,6 +182,28 @@
             word-wrap: break-word;
         }
         
+        /* Status indicator for records */
+        .record-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+        
+        .status-completed {
+            background-color: #e7f7ef;
+            color: #0d6832;
+        }
+        
+        .doctor-specialty {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
         footer {
             background-color: #1d4159ff;
             color: white;
@@ -201,7 +223,33 @@
             font-size: 16px;
         }
         
-        /* Responsive Design */
+       
+        .info-message {
+            background-color: #f0f8ff;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+            border-left: 4px solid #4d93c2ff;
+        }
+        
+        .info-message p {
+            margin: 0;
+            color: #4d93c2ff;
+            font-size: 14px;
+        }
+        
+        
+        @media print {
+            .logout-link, nav {
+                display: none;
+            }
+            
+            .history-section {
+                box-shadow: none;
+                border: 1px solid #ddd;
+            }
+        }
+        
         @media (max-width: 768px) {
             nav ul {
                 flex-direction: column;
@@ -230,6 +278,7 @@
             .medical-table {
                 display: block;
                 overflow-x: auto;
+                white-space: nowrap;
             }
             
             .medical-table th, .medical-table td {
@@ -239,6 +288,7 @@
             
             .notes-cell {
                 max-width: 200px;
+                white-space: normal;
             }
         }
     </style>
@@ -275,29 +325,39 @@
         <div class="history-section">
             <h2 class="section-title">Treatment Records</h2>
             
-            <table class="medical-table">
+            <!-- Desktop Table View -->
+            <table class="medical-table" aria-label="Patient medical history records">
                 <thead>
                     <tr>
-                        <th>Date</th>
-                        <th>Doctor Seen</th>
-                        <th>Diagnosis</th>
-                        <th>Prescribed Medications</th>
-                        <th class="notes-cell">Doctor's Notes</th>
+                        <th scope="col">Date</th>
+                        <th scope="col">Doctor Seen</th>
+                        <th scope="col">Diagnosis</th>
+                        <th scope="col">Prescribed Medications</th>
+                        <th scope="col" class="notes-cell">Doctor's Notes</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td>October 15, 2023</td>
-                        <td>Dr. Hajimi</td>
+                        <td>
+                            October 15, 2023<br>
+                            <span class="record-status status-completed">Completed</span>
+                        </td>
+                        <td>
+                            Dr. Hajimi<br>
+                            <span class="doctor-specialty">General Practitioner</span>
+                        </td>
                         <td>Seasonal allergies</td>
                         <td>Loratadine 10mg, once daily</td>
                         <td class="notes-cell">Patient presented with watery eyes, sneezing, and nasal congestion. Symptoms consistent with seasonal allergies. Recommended over-the-counter antihistamine and nasal spray.</td>
                     </tr>
-                    <tr class="empty-row">
-                        <td colspan="5">No additional medical records available</td>
-                    </tr>
+
                 </tbody>
             </table>
+            
+
+            <div class="info-message">
+                <p><strong>Note:</strong> This is your complete medical history. Contact the clinic if you notice any discrepancies.</p>
+            </div>
         </div>
     </main>
 

@@ -164,11 +164,16 @@
             padding: 25px;
             border-radius: 6px;
             border-left: 4px solid #4d93c2ff;
+            margin-bottom: 20px;
         }
         
         .appointment-info p {
             margin-bottom: 12px;
             font-size: 16px;
+        }
+        
+        .appointment-info strong {
+            color: #4d93c2ff;
         }
         
         .stats-grid {
@@ -183,6 +188,11 @@
             padding: 25px;
             border-radius: 6px;
             text-align: center;
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
         }
         
         .stat-number {
@@ -199,13 +209,13 @@
         
         .no-appointment {
             text-align: center;
-            padding: 50px 25px;
+            padding: 40px 25px;
             color: #666;
         }
         
         .no-appointment p {
-            font-size: 20px;
-            margin-bottom: 15px;
+            font-size: 18px;
+            margin-bottom: 20px;
         }
         
         .btn-primary {
@@ -214,17 +224,42 @@
             padding: 14px 28px;
             border: none;
             border-radius: 4px;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
             text-decoration: none;
             display: inline-block;
-            margin-top: 20px;
         }
         
         .btn-primary:hover {
             background-color: #1d5a8a;
+            transform: translateY(-2px);
+        }
+        
+       
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        
+        .status-confirmed {
+            background-color: #e7f7ef;
+            color: #0d6832;
+        }
+        
+        .status-pending {
+            background-color: #fff4e6;
+            color: #cc5c00;
+        }
+        
+        .status-cancelled {
+            background-color: #ffe6e6;
+            color: #cc0000;
         }
         
         footer {
@@ -246,7 +281,31 @@
             font-size: 16px;
         }
         
-        /* Responsive Design */
+       
+        .quick-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 25px;
+        }
+        
+        .action-btn {
+            background-color: #f0f8ff;
+            border: 2px solid #4d93c2ff;
+            color: #4d93c2ff;
+            padding: 15px;
+            border-radius: 6px;
+            text-decoration: none;
+            text-align: center;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .action-btn:hover {
+            background-color: #4d93c2ff;
+            color: white;
+        }
+        
         @media (max-width: 768px) {
             main {
                 grid-template-columns: 1fr;
@@ -256,6 +315,10 @@
             .stats-grid {
                 grid-template-columns: 1fr;
                 gap: 15px;
+            }
+            
+            .quick-actions {
+                grid-template-columns: 1fr;
             }
             
             nav ul {
@@ -290,6 +353,10 @@
                 margin: -25px -25px 20px -25px;
                 padding: 12px;
             }
+            
+            .stat-number {
+                font-size: 28px;
+            }
         }
     </style>
 </head>
@@ -322,14 +389,11 @@
     <main>
         <div class="dashboard-section">
             <h2>Next Appointment</h2>
-            <div class="appointment-info">
-                <p><strong>Date:</strong> -</p>
-                <p><strong>Time:</strong> -</p>
-                <p><strong>Doctor:</strong> -</p>
-                <p><strong>Status:</strong> -</p>
-            </div>
+            
+
             <div class="no-appointment">
-                <p>No upcoming appointments</p>
+                <p>No upcoming appointments scheduled</p>
+                <p style="font-size: 14px; margin-bottom: 25px;">Book your next appointment to get started with your healthcare journey.</p>
                 <a href="book_appointment.php" class="btn-primary">Book New Appointment</a>
             </div>
         </div>
@@ -338,20 +402,31 @@
             <h2>Quick Stats</h2>
             <div class="stats-grid">
                 <div class="stat-card">
-                    <div class="stat-number">-</div>
+                    <div class="stat-number">0</div>
                     <div class="stat-label">Total Appointments</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number">-</div>
+                    <div class="stat-number">0</div>
                     <div class="stat-label">Pending Appointments</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number">-</div>
+                    <div class="stat-number">0</div>
                     <div class="stat-label">Completed Visits</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number">-</div>
+                    <div class="stat-number">0</div>
                     <div class="stat-label">Upcoming Visits</div>
+                </div>
+            </div>
+            
+            <!-- NEW: Quick Actions Section -->
+            <div style="margin-top: 30px;">
+                <h3 style="color: #4d93c2ff; margin-bottom: 15px; font-size: 18px;">Quick Actions</h3>
+                <div class="quick-actions">
+                    <a href="book_appointment.php" class="action-btn">Book Appointment</a>
+                    <a href="medical_history.php" class="action-btn">View Medical History</a>
+                    <a href="patient_profile.php" class="action-btn">Update Profile</a>
+                    <a href="my_appointment.php" class="action-btn">My Appointments</a>
                 </div>
             </div>
         </div>

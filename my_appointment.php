@@ -244,7 +244,7 @@
             font-size: 16px;
         }
         
-        /* Responsive Design */
+        
         @media (max-width: 768px) {
             nav ul {
                 flex-direction: column;

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nexus Care - My Profile </title>
+    <title>Nexus Care - My Profile</title>
     <style>
         * {
             margin: 0;
@@ -149,6 +149,7 @@
         .profile-table {
             width: 100%;
             border-collapse: collapse;
+            margin-bottom: 25px;
         }
         
         .profile-table th, .profile-table td {
@@ -166,6 +167,77 @@
         
         .profile-table tr:hover {
             background-color: #f9f9f9;
+        }
+        
+      
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        
+        .btn-primary {
+            background-color: #4d93c2ff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #1d5a8a;
+        }
+        
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #545b62;
+        }
+        
+        .btn-outline {
+            background-color: transparent;
+            color: #4d93c2ff;
+            border: 2px solid #4d93c2ff;
+        }
+        
+        .btn-outline:hover {
+            background-color: #4d93c2ff;
+            color: white;
+        }
+        
+        .important-info {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .important-info h3 {
+            color: #856404;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        
+        .important-info p {
+            color: #856404;
+            margin: 0;
+            font-size: 14px;
         }
         
         footer {
@@ -187,7 +259,31 @@
             font-size: 16px;
         }
         
-        /* Responsive Design */
+      
+        .mobile-profile-view {
+            display: none;
+        }
+        
+        .profile-card {
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid #4d93c2ff;
+        }
+        
+        .profile-card .label {
+            font-weight: 600;
+            color: #4d93c2ff;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .profile-card .value {
+            color: #333;
+        }
+        
+        
         @media (max-width: 768px) {
             nav ul {
                 flex-direction: column;
@@ -214,8 +310,25 @@
             }
             
             .profile-table {
+                display: none; 
+            }
+            
+            .mobile-profile-view {
                 display: block;
-                overflow-x: auto;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+        }
+        
+        @media (min-width: 769px) {
+            .mobile-profile-view {
+                display: none; /* Hide card view on desktop */
             }
         }
     </style>
@@ -252,44 +365,98 @@
         <div class="profile-section">
             <h2 class="section-title">Personal Details</h2>
             
-            <table class="profile-table">
+            
+            <table class="profile-table" aria-label="Patient profile information">
                 <tr>
-                    <th>Patient ID</th>
-                    <td>-</td>
+                    <th scope="row">Patient ID</th>
+                    <td>P-2024-001</td>
                 </tr>
                 <tr>
-                    <th>Full Name</th>
+                    <th scope="row">Full Name</th>
                     <td>Hajimi</td>
                 </tr>
                 <tr>
-                    <th>Date of Birth</th>
-                    <td>March 15, 2068</td>
+                    <th scope="row">Date of Birth</th>
+                    <td>March 15, 1985</td>
                 </tr>
                 <tr>
-                    <th>Email Address</th>
+                    <th scope="row">Email Address</th>
                     <td>hajimi@gmail.com</td>
                 </tr>
                 <tr>
-                    <th>Phone Number</th>
+                    <th scope="row">Phone Number</th>
                     <td>(+60) 10785 6788</td>
                 </tr>
                 <tr>
-                    <th>Address</th>
-                    <td>123, Taman Mambo</td>
+                    <th scope="row">Address</th>
+                    <td>123, Taman Mambo, 11900 Bayan Lepas, Pulau Pinang</td>
                 </tr>
                 <tr>
-                    <th>Emergency Contact</th>
+                    <th scope="row">Emergency Contact</th>
                     <td>Jacky (+60) 10085 66543</td>
                 </tr>
                 <tr>
-                    <th>Blood Type</th>
-                    <td>AB</td>
+                    <th scope="row">Blood Type</th>
+                    <td>AB+</td>
                 </tr>
                 <tr>
-                    <th>Primary Care Physician</th>
-                    <td>Dr. Hajimi</td>
+                    <th scope="row">Primary Care Physician</th>
+                    <td>Dr. Sarah Chen</td>
                 </tr>
             </table>
+            
+            
+            <div class="mobile-profile-view">
+                <div class="profile-card">
+                    <span class="label">Patient ID</span>
+                    <span class="value">P-2024-001</span>
+                </div>
+                <div class="profile-card">
+                    <span class="label">Full Name</span>
+                    <span class="value">Hajimi</span>
+                </div>
+                <div class="profile-card">
+                    <span class="label">Date of Birth</span>
+                    <span class="value">March 15, 1985</span>
+                </div>
+                <div class="profile-card">
+                    <span class="label">Email Address</span>
+                    <span class="value">hajimi@gmail.com</span>
+                </div>
+                <div class="profile-card">
+                    <span class="label">Phone Number</span>
+                    <span class="value">(+60) 10785 6788</span>
+                </div>
+                <div class="profile-card">
+                    <span class="label">Address</span>
+                    <span class="value">123, Taman Mambo, 11900 Bayan Lepas, Pulau Pinang</span>
+                </div>
+                <div class="profile-card">
+                    <span class="label">Emergency Contact</span>
+                    <span class="value">Jacky (+60) 10085 66543</span>
+                </div>
+                <div class="profile-card">
+                    <span class="label">Blood Type</span>
+                    <span class="value">AB+</span>
+                </div>
+                <div class="profile-card">
+                    <span class="label">Primary Care Physician</span>
+                    <span class="value">Dr. Sarah Chen</span>
+                </div>
+            </div>
+            
+           
+            <div class="important-info">
+                <h3>📋 Profile Update Required</h3>
+                <p>Please ensure your contact information is up to date. This helps us reach you for appointment reminders and important health updates.</p>
+            </div>
+            
+            
+            <div class="action-buttons">
+                <a href="edit_profile.php" class="btn btn-primary">Edit Profile</a>
+                <a href="change_password.php" class="btn btn-outline">Change Password</a>
+                <a href="patient_dashboard.php" class="btn btn-secondary">Back to Dashboard</a>
+            </div>
         </div>
     </main>
 
