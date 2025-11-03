@@ -1,3 +1,39 @@
+<?php
+session_start();
+
+// Database connection
+require_once 'db_connection.php';
+
+// Check if user is logged in
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'patient') {
+    header("Location: login.php");
+    exit();
+}
+
+// Fetch patient details from database
+try {
+    $stmt = $pdo->prepare("
+        SELECT p.full_name 
+        FROM patient p 
+        WHERE p.user_id = ?
+    ");
+    $stmt->execute([$_SESSION['user_id']]);
+    $patient = $stmt->fetch();
+    
+    if (!$patient) {
+        // Patient record not found, redirect to login
+        header("Location: logout.php");
+        exit();
+    }
+    
+    $patient_name = $patient['full_name'];
+    
+} catch (PDOException $e) {
+    error_log("Database error: " . $e->getMessage());
+    $patient_name = "Patient"; // Fallback name
+}
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -367,7 +403,7 @@
             <div class="welcome-section">
                 <div class="welcome-message">
                     <h1>Patient Dashboard</h1>
-                    <p>Welcome, [Patient Name]!</p>
+                    <p>Welcome, <?php echo htmlspecialchars($patient_name); ?>!</p>
                 </div>
                 <a href="logout.php" class="logout-link">Logout</a>
             </div>

@@ -1,3 +1,57 @@
+<?php
+// Start session and include database connection
+session_start();
+require_once 'db_connection.php';
+
+// Check if user is logged in (you might want to add this)
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit();
+}
+
+// Get patient data based on logged-in user
+$user_id = $_SESSION['user_id'];
+
+try {
+    $stmt = $pdo->prepare("
+        SELECT 
+            p.patient_id,
+            p.full_name,
+            p.date_of_birth,
+            u.email,
+            p.phone_number,
+            p.address,
+            p.emergency_contact_name,
+            p.emergency_contact_phone,
+            p.blood_type,
+            p.primary_care_physician,
+            p.gender
+        FROM patient p
+        JOIN user u ON p.user_id = u.user_id
+        WHERE p.user_id = ?
+    ");
+    
+    $stmt->execute([$user_id]);
+    $patient = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$patient) {
+        die("Patient profile not found. Please contact administrator.");
+    }
+    
+} catch(PDOException $e) {
+    error_log("Error fetching patient data: " . $e->getMessage());
+    die("Error loading profile data. Please try again later.");
+}
+
+// Format date of birth for display
+$formatted_dob = date('F j, Y', strtotime($patient['date_of_birth']));
+
+// Format patient ID for display
+$display_patient_id = "P-" . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
+
+// Format emergency contact
+$emergency_contact = $patient['emergency_contact_name'] . " (" . $patient['emergency_contact_phone'] . ")";
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,6 +59,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nexus Care - My Profile</title>
     <style>
+       
         * {
             margin: 0;
             padding: 0;
@@ -169,7 +224,6 @@
             background-color: #f9f9f9;
         }
         
-      
         .action-buttons {
             display: flex;
             gap: 15px;
@@ -259,7 +313,6 @@
             font-size: 16px;
         }
         
-      
         .mobile-profile-view {
             display: none;
         }
@@ -282,7 +335,6 @@
         .profile-card .value {
             color: #333;
         }
-        
         
         @media (max-width: 768px) {
             nav ul {
@@ -328,7 +380,7 @@
         
         @media (min-width: 769px) {
             .mobile-profile-view {
-                display: none; /* Hide card view on desktop */
+                display: none;
             }
         }
     </style>
@@ -340,7 +392,7 @@
             <div class="welcome-section">
                 <div class="welcome-message">
                     <h1>My Profile</h1>
-                    <p>Welcome, Hajimi!</p>
+                    <p>Welcome, <?php echo htmlspecialchars($patient['full_name']); ?>!</p>
                 </div>
                 <a href="logout.php" class="logout-link">Logout</a>
             </div>
@@ -365,92 +417,90 @@
         <div class="profile-section">
             <h2 class="section-title">Personal Details</h2>
             
-            
+            <!-- Desktop Table View -->
             <table class="profile-table" aria-label="Patient profile information">
                 <tr>
                     <th scope="row">Patient ID</th>
-                    <td>P-2024-001</td>
+                    <td><?php echo htmlspecialchars($display_patient_id); ?></td>
                 </tr>
                 <tr>
                     <th scope="row">Full Name</th>
-                    <td>Hajimi</td>
+                    <td><?php echo htmlspecialchars($patient['full_name']); ?></td>
                 </tr>
                 <tr>
                     <th scope="row">Date of Birth</th>
-                    <td>March 15, 1985</td>
+                    <td><?php echo htmlspecialchars($formatted_dob); ?></td>
                 </tr>
                 <tr>
                     <th scope="row">Email Address</th>
-                    <td>hajimi@gmail.com</td>
+                    <td><?php echo htmlspecialchars($patient['email']); ?></td>
                 </tr>
                 <tr>
                     <th scope="row">Phone Number</th>
-                    <td>(+60) 10785 6788</td>
+                    <td><?php echo htmlspecialchars($patient['phone_number']); ?></td>
                 </tr>
                 <tr>
                     <th scope="row">Address</th>
-                    <td>123, Taman Mambo, 11900 Bayan Lepas, Pulau Pinang</td>
+                    <td><?php echo htmlspecialchars($patient['address']); ?></td>
                 </tr>
                 <tr>
                     <th scope="row">Emergency Contact</th>
-                    <td>Jacky (+60) 10085 66543</td>
+                    <td><?php echo htmlspecialchars($emergency_contact); ?></td>
                 </tr>
                 <tr>
                     <th scope="row">Blood Type</th>
-                    <td>AB+</td>
+                    <td><?php echo htmlspecialchars($patient['blood_type']); ?></td>
                 </tr>
                 <tr>
                     <th scope="row">Primary Care Physician</th>
-                    <td>Dr. Sarah Chen</td>
+                    <td><?php echo htmlspecialchars($patient['primary_care_physician']); ?></td>
                 </tr>
             </table>
             
-            
+            <!-- Mobile Card View -->
             <div class="mobile-profile-view">
                 <div class="profile-card">
                     <span class="label">Patient ID</span>
-                    <span class="value">P-2024-001</span>
+                    <span class="value"><?php echo htmlspecialchars($display_patient_id); ?></span>
                 </div>
                 <div class="profile-card">
                     <span class="label">Full Name</span>
-                    <span class="value">Hajimi</span>
+                    <span class="value"><?php echo htmlspecialchars($patient['full_name']); ?></span>
                 </div>
                 <div class="profile-card">
                     <span class="label">Date of Birth</span>
-                    <span class="value">March 15, 1985</span>
+                    <span class="value"><?php echo htmlspecialchars($formatted_dob); ?></span>
                 </div>
                 <div class="profile-card">
                     <span class="label">Email Address</span>
-                    <span class="value">hajimi@gmail.com</span>
+                    <span class="value"><?php echo htmlspecialchars($patient['email']); ?></span>
                 </div>
                 <div class="profile-card">
                     <span class="label">Phone Number</span>
-                    <span class="value">(+60) 10785 6788</span>
+                    <span class="value"><?php echo htmlspecialchars($patient['phone_number']); ?></span>
                 </div>
                 <div class="profile-card">
                     <span class="label">Address</span>
-                    <span class="value">123, Taman Mambo, 11900 Bayan Lepas, Pulau Pinang</span>
+                    <span class="value"><?php echo htmlspecialchars($patient['address']); ?></span>
                 </div>
                 <div class="profile-card">
                     <span class="label">Emergency Contact</span>
-                    <span class="value">Jacky (+60) 10085 66543</span>
+                    <span class="value"><?php echo htmlspecialchars($emergency_contact); ?></span>
                 </div>
                 <div class="profile-card">
                     <span class="label">Blood Type</span>
-                    <span class="value">AB+</span>
+                    <span class="value"><?php echo htmlspecialchars($patient['blood_type']); ?></span>
                 </div>
                 <div class="profile-card">
                     <span class="label">Primary Care Physician</span>
-                    <span class="value">Dr. Sarah Chen</span>
+                    <span class="value"><?php echo htmlspecialchars($patient['primary_care_physician']); ?></span>
                 </div>
             </div>
             
-           
             <div class="important-info">
                 <h3>📋 Profile Update Required</h3>
                 <p>Please ensure your contact information is up to date. This helps us reach you for appointment reminders and important health updates.</p>
             </div>
-            
             
             <div class="action-buttons">
                 <a href="edit_profile.php" class="btn btn-primary">Edit Profile</a>

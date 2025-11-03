@@ -1,3 +1,38 @@
+<?php
+session_start();
+
+// Database connection
+require_once 'db_connection.php';
+
+// Check if user is logged in
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'patient') {
+    header("Location: login.php");
+    exit();
+}
+
+// Fetch patient details from database
+try {
+    $stmt = $pdo->prepare("
+        SELECT p.full_name 
+        FROM patient p 
+        WHERE p.user_id = ?
+    ");
+    $stmt->execute([$_SESSION['user_id']]);
+    $patient = $stmt->fetch();
+    
+    if (!$patient) {
+        // Patient record not found, redirect to login
+        header("Location: logout.php");
+        exit();
+    }
+    
+    $patient_name = $patient['full_name'];
+    
+} catch (PDOException $e) {
+    error_log("Database error: " . $e->getMessage());
+    $patient_name = "Patient"; // Fallback name
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -324,7 +359,7 @@
             <div class="welcome-section">
                 <div class="welcome-message">
                     <h1>Book Appointment</h1>
-                    <p>Welcome, [Patient Name]!</p>
+                    <p>Welcome, <?php echo htmlspecialchars($patient_name); ?>!</p>
                 </div>
                 <a href="logout.php" class="logout-link">Logout</a>
             </div>
@@ -470,35 +505,56 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-           
             const dateInput = document.getElementById('date');
             const today = new Date().toISOString().split('T')[0];
             dateInput.min = today;
             dateInput.value = today;
             
-      
+            // Enhanced date validation to exclude weekends
+            dateInput.addEventListener('change', function() {
+                const selectedDate = new Date(this.value);
+                const dayOfWeek = selectedDate.getDay();
+                
+                // 0 = Sunday, 6 = Saturday
+                if (dayOfWeek === 0 || dayOfWeek === 6) {
+                    alert('Please select a weekday (Monday-Friday). We are closed on weekends.');
+                    this.value = today;
+                }
+            });
+            
             document.getElementById('appointmentForm').addEventListener('submit', function(e) {
                 e.preventDefault();
                 
-            
+                // Basic form validation
+                const date = document.getElementById('date').value;
+                const time = document.getElementById('time').value;
+                const reason = document.getElementById('reason').value.trim();
+                
+                if (!date || !time || !reason) {
+                    alert('Please fill in all required fields.');
+                    return;
+                }
+                
+                if (reason.length < 10) {
+                    alert('Please provide a more detailed reason for your visit (at least 10 characters).');
+                    return;
+                }
+                
                 document.getElementById('loadingIndicator').classList.remove('d-none');
                 
-               
+                // Simulate form submission
                 setTimeout(function() {
-                   
                     document.getElementById('loadingIndicator').classList.add('d-none');
-                    
-                   
                     document.getElementById('successMessage').classList.remove('d-none');
                     
-                    
+                    // Reset form but keep today's date
                     e.target.reset();
-                    dateInput.value = today; 
+                    dateInput.value = today;
                     
+                    // Scroll to top to show success message
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                     
-                    window.scrollTo(0, 0);
-                    
-                   
+                    // Hide success message after 5 seconds
                     setTimeout(function() {
                         document.getElementById('successMessage').classList.add('d-none');
                     }, 5000);
