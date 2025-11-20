@@ -258,7 +258,7 @@
             </div>
             
             <div class="logout-info">
-                <p>You will be redirected to the login page.</p>
+                <p>You will be redirected to the home page.</p>
                 <p>Auto-redirect in <span class="countdown" id="countdown">10</span> seconds</p>
             </div>
         </div>
@@ -271,7 +271,7 @@
     </footer>
 
     <script>
-        // Countdown timer for auto-redirect
+        // Countdown timer for auto-redirect to home page
         document.addEventListener('DOMContentLoaded', function() {
             let countdown = 10;
             const countdownElement = document.getElementById('countdown');
@@ -281,7 +281,7 @@
                 
                 if (countdown <= 0) {
                     clearInterval(countdownInterval);
-                    window.location.href = 'login.php';
+                    window.location.href = 'index.php'; // Redirect to home page
                 }
             }, 1000);
             
