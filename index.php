@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NexusCare - Home</title>
+<<<<<<< HEAD
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -340,10 +341,13 @@
             }
         }
     </style>
+=======
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
 </head>
 <body>
 
     <header>
+<<<<<<< HEAD
         <div class="header-container">
             <div class="logo-container">
                 <img src="Picture/NexusCareLogo_withoutbg.png" alt="NexusCare Logo">
@@ -452,5 +456,24 @@
             });
         });
     </script>
+=======
+        <img src="Picture/NexusCareLogo_withoutbg.png" alt="NexusCare Logo" width="150">
+        <h1>Welcome to NexusCare</h1>
+    </header>
+
+    <main>
+        <section id="about">
+            <h2>About Us</h2>
+            <p>At NexusCare, we are dedicated to providing compassionate and comprehensive healthcare for you and your family. Our team of experienced doctors and nurses utilizes a modern, patient-centered approach to ensure you receive the highest quality of care in a comfortable environment.</p>
+            <p>We believe in leveraging technology to make healthcare more accessible and efficient.</p>
+            <p>Your health is our journey together.</p>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 NexusCare. All rights reserved.</p>
+    </footer>
+
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
 </body>
 </html>

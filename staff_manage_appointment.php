@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NexusCare - Manage Appointments</title>
+<<<<<<< HEAD
     <style>
         * {
             margin: 0;
@@ -471,10 +472,47 @@
                 <button onclick="showEmergencyForm()" class="btn-primary">New Emergency Case</button>
                 <a href="#pending-requests" class="btn-link">View Pending Requests (5)</a>
                 <a href="#queue-management" class="btn-link">Manage Queues</a>
+=======
+</head>
+<body>
+
+    <!-- Top Navigation Bar - Staff Portal -->
+    <header>
+        <div>
+            <h1>NexusCare</h1>
+            <p>Staff Portal</p>
+        </div>
+        <nav>
+            <ul>
+                <li><a href="staff_dashboard.php">Dashboard</a></li>
+                <li><a href="staff_manage_appointments.php">Manage Appointments</a></li>
+                <li><a href="patient_list.php">Patient List</a></li>
+            </ul>
+        </nav>
+        <div>
+            <p>Welcome, Staff Member</p>
+            <a href="logout.php">Logout</a>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <h2>Appointment Management Center</h2>
+
+        <!-- Quick Action Buttons -->
+        <section>
+            <h3>Quick Actions</h3>
+            <div>
+                <button onclick="showWalkInForm()">New Walk-in Patient</button>
+                <button onclick="showEmergencyForm()">New Emergency Case</button>
+                <a href="#pending-requests">View Pending Requests (5)</a>
+                <a href="#queue-management">Manage Queues</a>
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
             </div>
         </section>
 
         <!-- Pending Appointment Requests Section -->
+<<<<<<< HEAD
         <section id="pending-requests" class="section-card">
             <h2>Pending Appointment Requests</h2>
             
@@ -535,19 +573,86 @@
                         <button type="submit" name="action" value="reject" class="btn-danger">Reject Request</button>
                     </div>
                 </form>
+=======
+        <section id="pending-requests">
+            <h3>Pending Appointment Requests</h3>
+            <div>
+                <!-- Pending Request 1 -->
+                <div>
+                    <h4>Request #R-001</h4>
+                    <p><strong>Patient:</strong> New Patient - John Davis</p>
+                    <p><strong>Preferred Date/Time:</strong> 2025-09-16, 2:00-3:00 PM</p>
+                    <p><strong>Reason:</strong> General consultation</p>
+                    <p><strong>Contact:</strong> john.d@email.com | 555-0110</p>
+                    
+                    <form action="" method="post">
+                        <input type="hidden" name="request_id" value="1">
+                        <div>
+                            <label for="doctor1">Assign Doctor:</label>
+                            <select id="doctor1" name="doctor_id" required>
+                                <option value="">Select Doctor</option>
+                                <option value="1">Dr. Smith</option>
+                                <option value="2">Dr. Johnson</option>
+                                <option value="3">Dr. Williams</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="appointment_time1">Appointment Time:</label>
+                            <input type="datetime-local" id="appointment_time1" name="appointment_time" required>
+                        </div>
+                        <button type="submit" name="action" value="confirm">Confirm Appointment</button>
+                        <button type="submit" name="action" value="reject">Reject Request</button>
+                    </form>
+                </div>
+
+                <!-- Pending Request 2 -->
+                <div>
+                    <h4>Request #R-002</h4>
+                    <p><strong>Patient:</strong> Sarah Johnson (Existing)</p>
+                    <p><strong>Preferred Date/Time:</strong> 2025-09-17, 10:00-11:00 AM</p>
+                    <p><strong>Reason:</strong> Follow-up check</p>
+                    
+                    <form action="" method="post">
+                        <input type="hidden" name="request_id" value="2">
+                        <div>
+                            <label for="doctor2">Assign Doctor:</label>
+                            <select id="doctor2" name="doctor_id" required>
+                                <option value="">Select Doctor</option>
+                                <option value="1">Dr. Smith</option>
+                                <option value="2">Dr. Johnson</option>
+                                <option value="3">Dr. Williams</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="appointment_time2">Appointment Time:</label>
+                            <input type="datetime-local" id="appointment_time2" name="appointment_time" required>
+                        </div>
+                        <button type="submit" name="action" value="confirm">Confirm Appointment</button>
+                        <button type="submit" name="action" value="reject">Reject Request</button>
+                    </form>
+                </div>
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
             </div>
         </section>
 
         <!-- Walk-in Registration Form (Initially Hidden) -->
+<<<<<<< HEAD
         <section id="walkin-form" class="section-card" style="display: none;">
             <h2>Register Walk-in Patient</h2>
             <form action="" method="post">
                 <div class="radio-group">
+=======
+        <section id="walkin-form" style="display: none;">
+            <h3>Register Walk-in Patient</h3>
+            <form action="" method="post">
+                <div>
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
                     <label><input type="radio" name="patient_type" value="existing" checked> Existing Patient</label>
                     <label><input type="radio" name="patient_type" value="new"> New Patient</label>
                 </div>
                 
                 <div id="existing-patient">
+<<<<<<< HEAD
                     <div class="form-group">
                         <label for="search_patient">Search Patient:</label>
                         <input type="text" id="search_patient" name="search_patient" placeholder="Enter patient name or ID">
@@ -560,12 +665,28 @@
                         <input type="text" id="walkin_name" name="walkin_name">
                     </div>
                     <div class="form-group">
+=======
+                    <label for="search_patient">Search Patient:</label>
+                    <input type="text" id="search_patient" name="search_patient" placeholder="Enter patient name or ID">
+                </div>
+                
+                <div id="new-patient">
+                    <div>
+                        <label for="walkin_name">Full Name:</label>
+                        <input type="text" id="walkin_name" name="walkin_name">
+                    </div>
+                    <div>
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
                         <label for="walkin_phone">Phone Number:</label>
                         <input type="tel" id="walkin_phone" name="walkin_phone">
                     </div>
                 </div>
                 
+<<<<<<< HEAD
                 <div class="form-group">
+=======
+                <div>
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
                     <label for="walkin_doctor">Assign to Doctor:</label>
                     <select id="walkin_doctor" name="walkin_doctor" required>
                         <option value="">Select Doctor</option>
@@ -575,28 +696,48 @@
                     </select>
                 </div>
                 
+<<<<<<< HEAD
                 <div class="form-group">
+=======
+                <div>
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
                     <label for="walkin_reason">Reason for Visit:</label>
                     <input type="text" id="walkin_reason" name="walkin_reason" required>
                 </div>
                 
+<<<<<<< HEAD
                 <div class="quick-actions">
                     <button type="submit" name="action" value="walkin" class="btn-primary">Register Walk-in</button>
                     <button type="button" onclick="hideWalkInForm()" class="btn-secondary">Cancel</button>
                 </div>
+=======
+                <button type="submit" name="action" value="walkin">Register Walk-in</button>
+                <button type="button" onclick="hideWalkInForm()">Cancel</button>
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
             </form>
         </section>
 
         <!-- Emergency Registration Form (Initially Hidden) -->
+<<<<<<< HEAD
         <section id="emergency-form" class="section-card" style="display: none;">
             <h2>Register Emergency Case</h2>
             <form action="" method="post">
                 <div class="form-group">
+=======
+        <section id="emergency-form" style="display: none;">
+            <h3>Register Emergency Case</h3>
+            <form action="" method="post">
+                <div>
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
                     <label for="emergency_name">Patient Name:</label>
                     <input type="text" id="emergency_name" name="emergency_name" required>
                 </div>
                 
+<<<<<<< HEAD
                 <div class="form-group">
+=======
+                <div>
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
                     <label for="emergency_doctor">Assign to Doctor:</label>
                     <select id="emergency_doctor" name="emergency_doctor" required>
                         <option value="">Select Doctor</option>
@@ -606,12 +747,20 @@
                     </select>
                 </div>
                 
+<<<<<<< HEAD
                 <div class="form-group">
+=======
+                <div>
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
                     <label for="emergency_reason">Emergency Details:</label>
                     <textarea id="emergency_reason" name="emergency_reason" required placeholder="Describe the emergency situation"></textarea>
                 </div>
                 
+<<<<<<< HEAD
                 <div class="form-group">
+=======
+                <div>
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
                     <label for="emergency_priority">Priority Level:</label>
                     <select id="emergency_priority" name="emergency_priority">
                         <option value="high">High Priority</option>
@@ -619,14 +768,20 @@
                     </select>
                 </div>
                 
+<<<<<<< HEAD
                 <div class="quick-actions">
                     <button type="submit" name="action" value="emergency" class="btn-primary">Register Emergency</button>
                     <button type="button" onclick="hideEmergencyForm()" class="btn-secondary">Cancel</button>
                 </div>
+=======
+                <button type="submit" name="action" value="emergency">Register Emergency</button>
+                <button type="button" onclick="hideEmergencyForm()">Cancel</button>
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
             </form>
         </section>
 
         <!-- Queue Management Section -->
+<<<<<<< HEAD
         <section id="queue-management" class="section-card">
             <h2>Current Queues</h2>
             
@@ -692,12 +847,64 @@
                         </div>
                     </div>
                 </div>
+=======
+        <section id="queue-management">
+            <h3>Current Queues</h3>
+            
+            <!-- Dr. Smith's Queue -->
+            <div>
+                <h4>Dr. Smith's Queue</h4>
+                <ol>
+                    <li>
+                        <strong>James Wilson</strong> (EMERGENCY) - Chest pain
+                        <button>Move Up</button>
+                        <button>Move Down</button>
+                        <button>Remove</button>
+                    </li>
+                    <li>
+                        <strong>Sarah Johnson</strong> (Confirmed) - Routine check-up
+                        <button>Move Up</button>
+                        <button>Move Down</button>
+                        <button>Remove</button>
+                    </li>
+                    <li>
+                        <strong>Walk-in: Maria Garcia</strong> - Fever and cough
+                        <button>Move Up</button>
+                        <button>Move Down</button>
+                        <button>Remove</button>
+                    </li>
+                </ol>
+            </div>
+
+            <!-- Dr. Johnson's Queue -->
+            <div>
+                <h4>Dr. Johnson's Queue</h4>
+                <ol>
+                    <li>
+                        <strong>David Brown</strong> (Confirmed) - Allergy consultation
+                        <button>Move Up</button>
+                        <button>Move Down</button>
+                        <button>Remove</button>
+                    </li>
+                    <li>
+                        <strong>Walk-in: Thomas Lee</strong> - Minor injury
+                        <button>Move Up</button>
+                        <button>Move Down</button>
+                        <button>Remove</button>
+                    </li>
+                </ol>
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
             </div>
         </section>
 
         <!-- Today's Appointments Overview -->
+<<<<<<< HEAD
         <section class="section-card">
             <h2>Today's Appointments Summary</h2>
+=======
+        <section>
+            <h3>Today's Appointments Summary</h3>
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
             <table>
                 <thead>
                     <tr>
@@ -714,31 +921,49 @@
                         <td>09:00 AM</td>
                         <td>Sarah Johnson</td>
                         <td>Dr. Smith</td>
+<<<<<<< HEAD
                         <td><span class="status-badge status-confirmed">Confirmed</span></td>
                         <td><span class="status-badge status-waiting">Checked In</span></td>
                         <td class="table-actions">
                             <a href="#">Edit</a> | <a href="#">Cancel</a>
                         </td>
+=======
+                        <td>Confirmed</td>
+                        <td>Checked In</td>
+                        <td><a href="#">Edit</a> | <a href="#">Cancel</a></td>
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
                     </tr>
                     <tr>
                         <td>10:30 AM</td>
                         <td>James Wilson</td>
                         <td>Dr. Smith</td>
+<<<<<<< HEAD
                         <td><span class="status-badge status-emergency">Emergency</span></td>
                         <td><span class="status-badge status-waiting">In Treatment</span></td>
                         <td class="table-actions">
                             <a href="#">Edit</a> | <a href="#">Complete</a>
                         </td>
+=======
+                        <td>Emergency</td>
+                        <td>In Treatment</td>
+                        <td><a href="#">Edit</a> | <a href="#">Complete</a></td>
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
                     </tr>
                     <tr>
                         <td>11:00 AM</td>
                         <td>Walk-in: Maria Garcia</td>
                         <td>Dr. Smith</td>
+<<<<<<< HEAD
                         <td><span class="status-badge status-walkin">Walk-in</span></td>
                         <td><span class="status-badge status-waiting">Waiting</span></td>
                         <td class="table-actions">
                             <a href="#">Edit</a> | <a href="#">Cancel</a>
                         </td>
+=======
+                        <td>Walk-in</td>
+                        <td>Waiting</td>
+                        <td><a href="#">Edit</a> | <a href="#">Cancel</a></td>
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
                     </tr>
                 </tbody>
             </table>
@@ -746,9 +971,13 @@
     </main>
 
     <footer>
+<<<<<<< HEAD
         <div class="footer-container">
             <p>&copy; 2025 NexusCare. All rights reserved.</p>
         </div>
+=======
+        <p>&copy; 2025 NexusCare. All rights reserved.</p>
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
     </footer>
 
     <script>
@@ -769,6 +998,7 @@
         function hideEmergencyForm() {
             document.getElementById('emergency-form').style.display = 'none';
         }
+<<<<<<< HEAD
 
         // Handle patient type radio buttons
         document.addEventListener('DOMContentLoaded', function() {
@@ -789,5 +1019,9 @@
             });
         });
     </script>
+=======
+    </script>
+
+>>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
 </body>
 </html>
