@@ -1,3 +1,96 @@
+<?php
+session_start();
+require_once 'db_connection.php';
+
+// Check if user is logged in and is a doctor
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'doctor') {
+    header('Location: login.php');
+    exit();
+}
+
+$doctor_id = $_SESSION['doctor_id'];
+$patient_id = $_GET['patient_id'] ?? 0;
+
+// Get doctor information
+$stmt = $pdo->prepare("SELECT * FROM doctor WHERE doctor_id = ?");
+$stmt->execute([$doctor_id]);
+$doctor = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Get patient details
+$stmt = $pdo->prepare("
+    SELECT p.*, u.email 
+    FROM patient p 
+    JOIN user u ON p.user_id = u.user_id 
+    WHERE p.patient_id = ?
+");
+$stmt->execute([$patient_id]);
+$patient = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$patient) {
+    header('Location: patient_list.php');
+    exit();
+}
+
+// Calculate age
+$age = '';
+if ($patient['date_of_birth']) {
+    $dob = new DateTime($patient['date_of_birth']);
+    $today = new DateTime();
+    $age = $today->diff($dob)->y;
+}
+
+// Get medical history for this patient with current doctor
+$stmt = $pdo->prepare("
+    SELECT mh.*, a.preferred_date as appointment_date, a.reason as visit_reason, d.full_name as doctor_name
+    FROM medical_history mh 
+    LEFT JOIN appointment a ON mh.appointment_id = a.appointment_id 
+    LEFT JOIN doctor d ON mh.doctor_id = d.doctor_id 
+    WHERE mh.patient_id = ? AND mh.doctor_id = ?
+    ORDER BY mh.diagnosis_date DESC
+");
+$stmt->execute([$patient_id, $doctor_id]);
+$medical_history = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Handle form submission for new medical record
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_record'])) {
+    $diagnosis_date = $_POST['diagnosis_date'];
+    $diagnosis = $_POST['diagnosis'];
+    $medication_name = $_POST['medication_name'];
+    $dosage = $_POST['dosage'];
+    $frequency = $_POST['frequency'];
+    $start_date = $_POST['start_date'];
+    $end_date = $_POST['end_date'];
+    $instructions = $_POST['instructions'];
+    $status = $_POST['status'];
+    $notes = $_POST['notes'];
+    
+    $stmt = $pdo->prepare("
+        INSERT INTO medical_history 
+        (patient_id, doctor_id, diagnosis_date, diagnosis, medication_name, dosage, frequency, start_date, end_date, instructions, status, notes) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ");
+    
+    $stmt->execute([
+        $patient_id, $doctor_id, $diagnosis_date, $diagnosis, $medication_name, 
+        $dosage, $frequency, $start_date, $end_date, $instructions, $status, $notes
+    ]);
+    
+    $success = "Medical record added successfully!";
+    
+    // Refresh medical history
+    $stmt = $pdo->prepare("
+        SELECT mh.*, a.preferred_date as appointment_date, a.reason as visit_reason, d.full_name as doctor_name
+        FROM medical_history mh 
+        LEFT JOIN appointment a ON mh.appointment_id = a.appointment_id 
+        LEFT JOIN doctor d ON mh.doctor_id = d.doctor_id 
+        WHERE mh.patient_id = ? AND mh.doctor_id = ?
+        ORDER BY mh.diagnosis_date DESC
+    ");
+    $stmt->execute([$patient_id, $doctor_id]);
+    $medical_history = $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -148,6 +241,19 @@
             color: white;
         }
         
+        .alert {
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            font-weight: 500;
+        }
+        
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
         .section-container {
             background-color: white;
             border-radius: 8px;
@@ -208,6 +314,29 @@
             background-color: #f9f9f9;
         }
         
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .status.active {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status.resolved {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .status.chronic {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        
         .form-group {
             margin-bottom: 20px;
         }
@@ -219,7 +348,7 @@
             color: #333;
         }
         
-        input, textarea {
+        input, textarea, select {
             width: 100%;
             padding: 10px;
             border: 1px solid #ddd;
@@ -228,7 +357,7 @@
             transition: border-color 0.3s;
         }
         
-        input:focus, textarea:focus {
+        input:focus, textarea:focus, select:focus {
             outline: none;
             border-color: #4d93c2ff;
             box-shadow: 0 0 0 2px rgba(77, 147, 194, 0.2);
@@ -239,15 +368,10 @@
             min-height: 80px;
         }
         
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 16px;
-        }
-        
-        .checkbox-group input {
-            width: auto;
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
         }
         
         .button-group {
@@ -335,6 +459,10 @@
                 flex-direction: column;
             }
             
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
             table {
                 display: block;
                 overflow-x: auto;
@@ -349,7 +477,11 @@
             <div class="welcome-section">
                 <div class="welcome-message">
                     <h1>Doctor Portal</h1>
-                    <p>Welcome, Dr. [Name]!</p>
+                    <p>Welcome, Dr. <?php 
+                        $doctorName = $doctor['full_name'] ?? 'Doctor';
+                        $cleanedName = preg_replace('/^Dr\.\s*/i', '', $doctorName);
+                        echo htmlspecialchars($cleanedName); 
+                    ?>!</p>
                 </div>
                 <a href="logout.php" class="logout-link">Logout</a>
             </div>
@@ -374,23 +506,26 @@
         
         <a href="patient_list.php" class="back-link">← Back to Patient List</a>
 
+        <?php if (isset($success)): ?>
+            <div class="alert alert-success">
+                <?php echo $success; ?>
+            </div>
+        <?php endif; ?>
+
         <!-- Patient Profile Section -->
         <section class="section-container">
             <h2>Patient Profile</h2>
             <div class="patient-info">
                 <div>
-                    <div class="info-item"><strong>Patient ID:</strong> P-001</div>
-                    <div class="info-item"><strong>Full Name:</strong> Sarah Johnson</div>
-                    <div class="info-item"><strong>Date of Birth:</strong> 1985-03-15 (Age: 40)</div>
-                    <div class="info-item"><strong>Gender:</strong> Female</div>
-                    <div class="info-item"><strong>Contact Email:</strong> sarah.j@email.com</div>
+                    <div class="info-item"><strong>Patient ID:</strong> P-<?php echo str_pad($patient['patient_id'], 3, '0', STR_PAD_LEFT); ?></div>
+                    <div class="info-item"><strong>Full Name:</strong> <?php echo htmlspecialchars($patient['full_name']); ?></div>
+                    <div class="info-item"><strong>Date of Birth:</strong> <?php echo $patient['date_of_birth'] . ($age ? " (Age: $age)" : ''); ?></div>
+                    <div class="info-item"><strong>Gender:</strong> <?php echo ucfirst($patient['gender'] ?? 'Not specified'); ?></div>
+                    <div class="info-item"><strong>Contact Email:</strong> <?php echo htmlspecialchars($patient['email']); ?></div>
                 </div>
                 <div>
-                    <div class="info-item"><strong>Phone Number:</strong> 555-0101</div>
-                    <div class="info-item"><strong>Address:</strong> 123 Main Street, City, State 12345</div>
-                    <div class="info-item"><strong>Emergency Contact:</strong> John Johnson (Spouse) - 555-0106</div>
-                    <div class="info-item"><strong>Blood Type:</strong> O+</div>
-                    <div class="info-item"><strong>Known Allergies:</strong> Penicillin, Pollen</div>
+                    <div class="info-item"><strong>Phone Number:</strong> <?php echo htmlspecialchars($patient['phone_number'] ?? 'Not provided'); ?></div>
+                    <div class="info-item"><strong>Address:</strong> <?php echo htmlspecialchars($patient['address'] ?? 'Not provided'); ?></div>
                 </div>
             </div>
         </section>
@@ -398,77 +533,93 @@
         <!-- Medical History Section -->
         <section class="section-container">
             <h2>Medical History</h2>
-            <div>
-                <h3>Past Appointments</h3>
+            <?php if (count($medical_history) > 0): ?>
                 <table>
                     <thead>
                         <tr>
                             <th>Date</th>
-                            <th>Reason for Visit</th>
                             <th>Diagnosis</th>
-                            <th>Prescription</th>
-                            <th>Doctor</th>
+                            <th>Medication</th>
+                            <th>Dosage</th>
+                            <th>Status</th>
+                            <th>Notes</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td>2025-09-10</td>
-                            <td>Routine check-up</td>
-                            <td>Healthy, normal vitals</td>
-                            <td>None</td>
-                            <td>Dr. [Your Name]</td>
-                        </tr>
-                        <tr>
-                            <td>2025-06-15</td>
-                            <td>Seasonal allergies</td>
-                            <td>Allergic rhinitis</td>
-                            <td>Antihistamines</td>
-                            <td>Dr. [Your Name]</td>
-                        </tr>
-                        <tr>
-                            <td>2025-03-20</td>
-                            <td>Flu symptoms</td>
-                            <td>Influenza</td>
-                            <td>Rest, fluids, antipyretics</td>
-                            <td>Dr. [Your Name]</td>
-                        </tr>
+                        <?php foreach ($medical_history as $record): ?>
+                            <tr>
+                                <td><?php echo $record['diagnosis_date']; ?></td>
+                                <td><?php echo htmlspecialchars($record['diagnosis']); ?></td>
+                                <td><?php echo htmlspecialchars($record['medication_name']); ?></td>
+                                <td><?php echo htmlspecialchars($record['dosage']); ?></td>
+                                <td><span class="status <?php echo $record['status']; ?>"><?php echo ucfirst($record['status']); ?></span></td>
+                                <td><?php echo htmlspecialchars($record['notes']); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
                     </tbody>
                 </table>
-            </div>
+            <?php else: ?>
+                <p>No medical history records found for this patient.</p>
+            <?php endif; ?>
         </section>
 
-        <!-- Update Records Form -->
+        <!-- Add Medical Record Form -->
         <section class="section-container">
-            <h2>Update Medical Records</h2>
+            <h2>Add Medical Record</h2>
             <form action="" method="post">
-                <div class="form-group">
-                    <label for="appointment-date">Appointment Date:</label>
-                    <input type="date" id="appointment-date" name="appointment_date" required>
-                </div>
-                <div class="form-group">
-                    <label for="reason">Reason for Visit:</label>
-                    <input type="text" id="reason" name="reason" required>
+                <input type="hidden" name="add_record" value="1">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="diagnosis_date">Diagnosis Date:</label>
+                        <input type="date" id="diagnosis_date" name="diagnosis_date" required value="<?php echo date('Y-m-d'); ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="status">Status:</label>
+                        <select id="status" name="status" required>
+                            <option value="active">Active</option>
+                            <option value="resolved">Resolved</option>
+                            <option value="chronic">Chronic</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="diagnosis">Diagnosis:</label>
-                    <textarea id="diagnosis" name="diagnosis" rows="3" placeholder="Enter diagnosis details"></textarea>
+                    <textarea id="diagnosis" name="diagnosis" rows="3" placeholder="Enter diagnosis details" required></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="medication_name">Medication Name:</label>
+                        <input type="text" id="medication_name" name="medication_name" placeholder="Enter medication name">
+                    </div>
+                    <div class="form-group">
+                        <label for="dosage">Dosage:</label>
+                        <input type="text" id="dosage" name="dosage" placeholder="e.g., 500mg">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="frequency">Frequency:</label>
+                        <input type="text" id="frequency" name="frequency" placeholder="e.g., Twice daily">
+                    </div>
+                    <div class="form-group">
+                        <label for="start_date">Start Date:</label>
+                        <input type="date" id="start_date" name="start_date">
+                    </div>
+                    <div class="form-group">
+                        <label for="end_date">End Date:</label>
+                        <input type="date" id="end_date" name="end_date">
+                    </div>
                 </div>
                 <div class="form-group">
-                    <label for="prescription">Prescription:</label>
-                    <textarea id="prescription" name="prescription" rows="3" placeholder="List prescribed medications and dosage"></textarea>
+                    <label for="instructions">Instructions:</label>
+                    <textarea id="instructions" name="instructions" rows="2" placeholder="Special instructions for medication"></textarea>
                 </div>
                 <div class="form-group">
-                    <label for="notes">Doctor's Notes:</label>
+                    <label for="notes">Additional Notes:</label>
                     <textarea id="notes" name="notes" rows="4" placeholder="Additional observations and recommendations"></textarea>
                 </div>
-                <div class="checkbox-group">
-                    <input type="checkbox" id="follow-up" name="follow_up">
-                    <label for="follow-up">Follow-up Required:</label>
-                    <label for="follow-up-date">Follow-up Date:</label>
-                    <input type="date" id="follow-up-date" name="follow_up_date">
-                </div>
                 <div class="button-group">
-                    <button type="submit" class="btn-primary">Update Patient Records</button>
+                    <button type="submit" class="btn-primary">Add Medical Record</button>
                     <button type="reset" class="btn-secondary">Clear Form</button>
                 </div>
             </form>
@@ -477,7 +628,7 @@
 
     <footer>
         <div class="footer-container">
-            <p>&copy; 2025 NexusCare. All rights reserved.</p>
+            <p>&copy; 2025 Nexus Care. All rights reserved.</p>
         </div>
     </footer>
 </body>
