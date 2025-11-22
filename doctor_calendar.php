@@ -15,6 +15,30 @@ $stmt = $pdo->prepare("SELECT * FROM doctor WHERE doctor_id = ?");
 $stmt->execute([$doctor_id]);
 $doctor = $stmt->fetch(PDO::FETCH_ASSOC);
 
+// Handle view type and date range
+$view_type = $_GET['view'] ?? 'week'; // Default to week view
+$current_date = $_GET['date'] ?? date('Y-m-d');
+
+// Calculate date ranges based on view type
+switch ($view_type) {
+    case 'day':
+        $start_date = $current_date;
+        $end_date = $current_date;
+        $display_text = date('l, F j, Y', strtotime($current_date));
+        break;
+    case 'month':
+        $start_date = date('Y-m-01', strtotime($current_date));
+        $end_date = date('Y-m-t', strtotime($current_date));
+        $display_text = date('F Y', strtotime($current_date));
+        break;
+    case 'week':
+    default:
+        $start_date = date('Y-m-d', strtotime('monday this week', strtotime($current_date)));
+        $end_date = date('Y-m-d', strtotime('sunday this week', strtotime($current_date)));
+        $display_text = date('M j', strtotime($start_date)) . ' - ' . date('M j, Y', strtotime($end_date));
+        break;
+}
+
 // Handle availability form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['available_date'])) {
     $available_date = $_POST['available_date'];
@@ -41,14 +65,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['available_date'])) {
         $stmt->execute([$doctor_id, $available_date, $start_time, $end_time]);
     }
     
-    header('Location: doctor_calendar.php?success=1');
+    header('Location: doctor_calendar.php?success=1&view=' . $view_type . '&date=' . $current_date);
     exit();
 }
 
-// Get current week's appointments
-$start_of_week = date('Y-m-d', strtotime('monday this week'));
-$end_of_week = date('Y-m-d', strtotime('sunday this week'));
-
+// Get appointments for the current view range
 $stmt = $pdo->prepare("
     SELECT a.*, p.full_name, p.date_of_birth, p.gender
     FROM appointment a
@@ -56,7 +77,7 @@ $stmt = $pdo->prepare("
     WHERE a.doctor_id = ? AND a.preferred_date BETWEEN ? AND ?
     ORDER BY a.preferred_date ASC, a.preferred_time ASC
 ");
-$stmt->execute([$doctor_id, $start_of_week, $end_of_week]);
+$stmt->execute([$doctor_id, $start_date, $end_date]);
 $appointments = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Get doctor's availability for the week
@@ -69,7 +90,7 @@ $stmt = $pdo->prepare("
     SELECT * FROM doctor_schedule 
     WHERE doctor_id = ? AND date BETWEEN ? AND ? AND is_available = 1
 ");
-$stmt->execute([$doctor_id, $start_of_week, $end_of_week]);
+$stmt->execute([$doctor_id, $start_date, $end_date]);
 $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
@@ -79,8 +100,8 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NexusCare - My Schedule & Appointments</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* Your existing CSS styles remain the same */
         * {
             margin: 0;
             padding: 0;
@@ -205,11 +226,22 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
             font-size: 28.8px;
         }
         
+        .week-display {
+            background-color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            font-weight: 600;
+            color: #4d93c2ff;
+        }
+        
         .calendar-controls {
             display: flex;
-            gap: 16px;
+            justify-content: space-between;
             align-items: center;
             margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
         }
         
         .view-buttons {
@@ -225,20 +257,41 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
             border-radius: 4px;
             cursor: pointer;
             transition: all 0.3s;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
         }
         
         .btn-view:hover, .btn-view.active {
             background-color: #4d93c2ff;
             color: white;
+            text-decoration: none;
         }
         
-        .week-display {
+        .navigation-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .btn-nav {
             background-color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            font-weight: 600;
             color: #4d93c2ff;
+            border: 1px solid #4d93c2ff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .btn-nav:hover {
+            background-color: #4d93c2ff;
+            color: white;
+            text-decoration: none;
         }
         
         .calendar-container {
@@ -275,6 +328,13 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
             padding: 8px;
             min-height: 100px;
             background-color: #f9f9f9;
+            transition: all 0.3s ease;
+        }
+        
+        .calendar-day.today {
+            background-color: #e6f2fa;
+            border: 2px solid #4d93c2ff;
+            box-shadow: 0 2px 8px rgba(77, 147, 194, 0.2);
         }
         
         .calendar-day-header {
@@ -282,24 +342,201 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
             text-align: center;
             margin-bottom: 8px;
             color: #4d93c2ff;
+            padding: 4px;
+            border-radius: 3px;
+            transition: all 0.3s ease;
+        }
+        
+        .calendar-day-header.today {
+            background-color: #4d93c2ff;
+            color: white;
+            border-radius: 4px;
         }
         
         .appointment-slot {
             background-color: #4d93c2ff;
             color: white;
-            padding: 4px;
+            padding: 4px 6px;
             border-radius: 3px;
             margin-bottom: 4px;
-            font-size: 12px;
+            font-size: 11px;
+            line-height: 1.3;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            transition: all 0.3s ease;
+        }
+        
+        .appointment-slot:hover {
+            background-color: #1d5a8a;
+            transform: translateY(-1px);
         }
         
         .available-slot {
             background-color: #28a745;
             color: white;
-            padding: 4px;
+            padding: 4px 6px;
             border-radius: 3px;
             margin-bottom: 4px;
+            font-size: 11px;
+            line-height: 1.3;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            transition: all 0.3s ease;
+        }
+        
+        .available-slot:hover {
+            background-color: #1e7e34;
+            transform: translateY(-1px);
+        }
+        
+        /* Month View Specific Styles */
+        .month-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+            margin-top: 10px;
+        }
+        
+        .month-header {
+            grid-column: 1 / -1;
+            text-align: center;
+            font-weight: bold;
+            padding: 12px;
+            background: linear-gradient(135deg, #4d93c2ff, #1d5a8a);
+            color: white;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 18px;
+        }
+        
+        .day-header {
+            text-align: center;
+            font-weight: bold;
+            padding: 10px 8px;
+            background: #e6f2fa;
+            color: #4d93c2ff;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        
+        .month-day {
+            min-height: 80px;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 6px;
             font-size: 12px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .month-day.today {
+            background: #e6f2fa;
+            border: 2px solid #4d93c2ff;
+            box-shadow: 0 2px 6px rgba(77, 147, 194, 0.3);
+        }
+        
+        .month-day:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .day-number {
+            font-weight: bold;
+            margin-bottom: 4px;
+            color: #333;
+            font-size: 13px;
+        }
+        
+        .month-appointment {
+            background-color: #4d93c2ff;
+            color: white;
+            padding: 2px 4px;
+            border-radius: 2px;
+            margin-bottom: 2px;
+            font-size: 10px;
+            line-height: 1.2;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        /* Day View Specific Styles */
+        .day-view-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+            margin-top: 20px;
+        }
+        
+        .day-view-slot {
+            background-color: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .day-view-slot:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .time-slot-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .time-range {
+            font-weight: bold;
+            color: #4d93c2ff;
+            font-size: 16px;
+        }
+        
+        .slot-type {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .slot-type.appointment {
+            background-color: #4d93c2ff;
+            color: white;
+        }
+        
+        .slot-type.available {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .slot-type.free {
+            background-color: #6c757d;
+            color: white;
+        }
+        
+        .patient-info {
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .patient-name {
+            font-weight: 600;
+            color: #4d93c2ff;
+            margin-bottom: 4px;
+        }
+        
+        .appointment-reason {
+            color: #666;
+            font-size: 13px;
         }
         
         .availability-form {
@@ -369,6 +606,7 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         .btn-primary:hover {
             background-color: #1d5a8a;
+            transform: translateY(-1px);
         }
         
         .appointments-section {
@@ -405,6 +643,8 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         tr:hover {
             background-color: #f9f9f9;
+            transform: translateX(2px);
+            transition: all 0.3s ease;
         }
         
         .status {
@@ -430,9 +670,11 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
             text-decoration: none;
             margin-right: 10px;
             font-weight: 500;
+            transition: color 0.3s;
         }
         
         .action-links a:hover {
+            color: #1d5a8a;
             text-decoration: underline;
         }
         
@@ -454,6 +696,35 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
             color: white;
         }
         
+        /* Success Message Styles */
+        .success-message {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 12px 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border-left: 4px solid #28a745;
+            font-weight: 500;
+        }
+        
+        /* Empty State Styles */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+        
+        .empty-state i {
+            font-size: 48px;
+            color: #ccc;
+            margin-bottom: 16px;
+        }
+        
+        .empty-state h3 {
+            color: #666;
+            margin-bottom: 8px;
+        }
+        
         /* Responsive Design */
         @media (max-width: 768px) {
             .calendar-container {
@@ -461,6 +732,10 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
             }
             
             .calendar-grid {
+                grid-template-columns: repeat(1, 1fr);
+            }
+            
+            .month-grid {
                 grid-template-columns: repeat(1, 1fr);
             }
             
@@ -491,11 +766,46 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
             .calendar-controls {
                 flex-direction: column;
                 align-items: flex-start;
+                gap: 12px;
+            }
+            
+            .view-buttons, .navigation-controls {
+                width: 100%;
+                justify-content: center;
             }
             
             table {
                 display: block;
                 overflow-x: auto;
+            }
+            
+            .btn-view, .btn-nav {
+                padding: 10px 14px;
+                font-size: 13px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .calendar-view {
+                padding: 20px;
+            }
+            
+            .month-day {
+                min-height: 60px;
+                padding: 4px;
+            }
+            
+            .month-appointment {
+                font-size: 9px;
+                padding: 1px 2px;
+            }
+            
+            .day-view-slot {
+                padding: 12px;
+            }
+            
+            .time-range {
+                font-size: 14px;
             }
         }
     </style>
@@ -533,34 +843,57 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <div class="page-header">
             <h1>My Appointment Calendar</h1>
             <div class="week-display">
-                Week of: <strong id="currentWeek"><?php 
-                    echo date('M j', strtotime($start_of_week)) . ' - ' . date('M j, Y', strtotime($end_of_week)); 
-                ?></strong>
+                <?php echo ucfirst($view_type); ?>: <strong id="currentWeek"><?php echo $display_text; ?></strong>
             </div>
         </div>
         
         <div class="calendar-controls">
             <div class="view-buttons">
-                <button class="btn-view active">Day</button>
-                <button class="btn-view">Week</button>
-                <button class="btn-view">Month</button>
+                <a href="?view=day&date=<?php echo $current_date; ?>" class="btn-view <?php echo $view_type == 'day' ? 'active' : ''; ?>">Day</a>
+                <a href="?view=week&date=<?php echo $current_date; ?>" class="btn-view <?php echo $view_type == 'week' ? 'active' : ''; ?>">Week</a>
+                <a href="?view=month&date=<?php echo $current_date; ?>" class="btn-view <?php echo $view_type == 'month' ? 'active' : ''; ?>">Month</a>
+            </div>
+            <div class="navigation-controls">
+                <?php if ($view_type == 'day'): ?>
+                    <a href="?view=day&date=<?php echo date('Y-m-d', strtotime($current_date . ' -1 day')); ?>" class="btn-nav">← Previous Day</a>
+                    <a href="?view=day&date=<?php echo date('Y-m-d'); ?>" class="btn-nav">Today</a>
+                    <a href="?view=day&date=<?php echo date('Y-m-d', strtotime($current_date . ' +1 day')); ?>" class="btn-nav">Next Day →</a>
+                <?php elseif ($view_type == 'week'): ?>
+                    <a href="?view=week&date=<?php echo date('Y-m-d', strtotime($current_date . ' -1 week')); ?>" class="btn-nav">← Previous Week</a>
+                    <a href="?view=week&date=<?php echo date('Y-m-d'); ?>" class="btn-nav">This Week</a>
+                    <a href="?view=week&date=<?php echo date('Y-m-d', strtotime($current_date . ' +1 week')); ?>" class="btn-nav">Next Week →</a>
+                <?php elseif ($view_type == 'month'): ?>
+                    <a href="?view=month&date=<?php echo date('Y-m-d', strtotime($current_date . ' -1 month')); ?>" class="btn-nav">← Previous Month</a>
+                    <a href="?view=month&date=<?php echo date('Y-m-d'); ?>" class="btn-nav">This Month</a>
+                    <a href="?view=month&date=<?php echo date('Y-m-d', strtotime($current_date . ' +1 month')); ?>" class="btn-nav">Next Month →</a>
+                <?php endif; ?>
             </div>
         </div>
 
         <div class="calendar-container">
             <div class="calendar-view">
-                <h2>Weekly Schedule</h2>
+                <h2>
+                    <?php 
+                    if ($view_type == 'day') {
+                        echo 'Daily Schedule';
+                    } elseif ($view_type == 'week') {
+                        echo 'Weekly Schedule';
+                    } else {
+                        echo 'Monthly Overview';
+                    }
+                    ?>
+                </h2>
                 <p>Available slots are shown in <span style="color:#28a745;">GREEN</span>, and booked appointments in <span style="color:#4d93c2ff;">BLUE</span>.</p>
                 
                 <div class="calendar-grid">
                     <?php
-                    $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-                    foreach ($days as $index => $day) {
-                        $current_date = date('Y-m-d', strtotime($start_of_week . " +$index days"));
-                        $day_name = date('D, j M', strtotime($current_date));
+                    if ($view_type == 'day') {
+                        // Single day view
+                        $current_date_display = date('D, j M', strtotime($current_date));
+                        $is_today = $current_date == date('Y-m-d');
                         
-                        echo "<div class='calendar-day'>";
-                        echo "<div class='calendar-day-header'>$day_name</div>";
+                        echo "<div class='calendar-day" . ($is_today ? ' today' : '') . "'>";
+                        echo "<div class='calendar-day-header" . ($is_today ? ' today' : '') . "'>$current_date_display</div>";
                         
                         // Display appointments for this day
                         $day_appointments = array_filter($appointments, function($apt) use ($current_date) {
@@ -573,7 +906,106 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         }
                         
                         // Display available slots
-                        $day_of_week = strtolower($day);
+                        $day_of_week = strtolower(date('l', strtotime($current_date)));
+                        $available_today = array_filter($weekly_availability, function($avail) use ($day_of_week) {
+                            return $avail['day_of_week'] == $day_of_week && $avail['is_available'] == 1;
+                        });
+                        
+                        foreach ($available_today as $slot) {
+                            $start = date('g:i A', strtotime($slot['start_time']));
+                            $end = date('g:i A', strtotime($slot['end_time']));
+                            echo "<div class='available-slot'>$start - $end - Available</div>";
+                        }
+                        
+                        if (empty($day_appointments)) {
+                            echo "<div style='color:#666; font-size:12px; text-align:center; margin-top:20px;'>No appointments</div>";
+                        }
+                        
+                        echo "</div>";
+                        
+                    } elseif ($view_type == 'week') {
+                        // Week view
+                        $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                        foreach ($days as $index => $day) {
+                            $day_date = date('Y-m-d', strtotime($start_date . " +$index days"));
+                            $day_name = date('D, j M', strtotime($day_date));
+                            $is_today = $day_date == date('Y-m-d');
+                            
+                            echo "<div class='calendar-day" . ($is_today ? ' today' : '') . "'>";
+                            echo "<div class='calendar-day-header" . ($is_today ? ' today' : '') . "'>$day_name</div>";
+                            
+                            // Display appointments for this day
+                            $day_appointments = array_filter($appointments, function($apt) use ($day_date) {
+                                return $apt['preferred_date'] == $day_date;
+                            });
+                            
+                            foreach ($day_appointments as $apt) {
+                                $time = date('g:i A', strtotime($apt['preferred_time']));
+                                echo "<div class='appointment-slot'>$time - " . htmlspecialchars($apt['full_name']) . "</div>";
+                            }
+                            
+                            // Display available slots
+                            $day_of_week = strtolower($day);
+                            $available_today = array_filter($weekly_availability, function($avail) use ($day_of_week) {
+                                return $avail['day_of_week'] == $day_of_week && $avail['is_available'] == 1;
+                            });
+                            
+                            foreach ($available_today as $slot) {
+                                $start = date('g:i A', strtotime($slot['start_time']));
+                                $end = date('g:i A', strtotime($slot['end_time']));
+                                echo "<div class='available-slot'>$start - $end - Available</div>";
+                            }
+                            
+                            if (empty($day_appointments)) {
+                                echo "<div style='color:#666; font-size:12px; text-align:center; margin-top:20px;'>No appointments</div>";
+                            }
+                            
+                            echo "</div>";
+                        }
+                    } else {
+                    // Month view - traditional calendar grid but styled like week view
+                    $first_day = date('Y-m-01', strtotime($current_date));
+                    $last_day = date('Y-m-t', strtotime($current_date));
+                    $days_in_month = date('t', strtotime($current_date));
+                    $current_year_month = date('Y-m', strtotime($current_date));
+                    
+                    // Get first day of month (0=Sunday, 1=Monday, etc.)
+                    $first_day_of_week = date('w', strtotime($first_day));
+                    
+                    echo "<div class='calendar-grid'>";
+                    
+                    // Day headers - keep the same styling as week view
+                    $day_headers = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                    foreach ($day_headers as $header) {
+                        echo "<div class='calendar-day-header'>$header</div>";
+                    }
+                    
+                    // Empty cells for days before the first day of month
+                    for ($i = 0; $i < $first_day_of_week; $i++) {
+                        echo "<div class='calendar-day' style='background-color: #f5f5f5; opacity: 0.6;'>";
+                        echo "<div style='color:#666; font-size:12px; text-align:center; margin-top:20px;'></div>";
+                        echo "</div>";
+                    }
+                    
+                    // Days of the month
+                    for ($day = 1; $day <= $days_in_month; $day++) {
+                        $current_day_date = $current_year_month . '-' . str_pad($day, 2, '0', STR_PAD_LEFT);
+                        $is_today = $current_day_date == date('Y-m-d');
+                        $day_appointments = array_filter($appointments, function($apt) use ($current_day_date) {
+                            return $apt['preferred_date'] == $current_day_date;
+                        });
+                        
+                        echo "<div class='calendar-day" . ($is_today ? ' today' : '') . "'>";
+                        echo "<div class='calendar-day-header" . ($is_today ? ' today' : '') . "'>" . date('D, j M', strtotime($current_day_date)) . "</div>";
+                        
+                        // Display appointments for this day
+                        foreach ($day_appointments as $apt) {
+                            $time = date('g:i A', strtotime($apt['preferred_time']));
+                            echo "<div class='appointment-slot'>$time - " . htmlspecialchars($apt['full_name']) . "</div>";
+                        }
+                        
+                        // Display available slots
+                        $day_of_week = strtolower(date('l', strtotime($current_day_date)));
                         $available_today = array_filter($weekly_availability, function($avail) use ($day_of_week) {
                             return $avail['day_of_week'] == $day_of_week && $avail['is_available'] == 1;
                         });
@@ -590,6 +1022,9 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         
                         echo "</div>";
                     }
+                    
+                    echo "</div>";
+                }
                     ?>
                 </div>
             </div>
@@ -597,11 +1032,13 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <div class="availability-form">
                 <h2>Set Your Availability</h2>
                 <?php if (isset($_GET['success'])): ?>
-                    <div style="background-color: #d4edda; color: #155724; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
-                        Availability updated successfully!
+                    <div class="success-message">
+                        <i class="fas fa-check-circle"></i> Availability updated successfully!
                     </div>
                 <?php endif; ?>
                 <form action="" method="post">
+                    <input type="hidden" name="view" value="<?php echo $view_type; ?>">
+                    <input type="hidden" name="date" value="<?php echo $current_date; ?>">
                     <div class="form-group">
                         <label for="available-date">Date:</label>
                         <input type="date" id="available-date" name="available_date" required>
@@ -624,7 +1061,7 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
 
         <section class="appointments-section">
-            <h2>Appointment List (This Week)</h2>
+            <h2>Appointment List (<?php echo $view_type == 'day' ? 'Today' : ($view_type == 'week' ? 'This Week' : 'This Month'); ?>)</h2>
             <table>
                 <thead>
                     <tr>
@@ -652,7 +1089,13 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="5" style="text-align: center;">No appointments scheduled for this week.</td>
+                            <td colspan="5" style="text-align: center; padding: 40px;">
+                                <div class="empty-state">
+                                    <i class="fas fa-calendar-times"></i>
+                                    <h3>No Appointments</h3>
+                                    <p>No appointments scheduled for <?php echo $view_type == 'day' ? 'today' : ($view_type == 'week' ? 'this week' : 'this month'); ?>.</p>
+                                </div>
+                            </td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -673,14 +1116,8 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('available-date').setAttribute('min', today);
             
-            // View buttons functionality
-            const viewButtons = document.querySelectorAll('.btn-view');
-            viewButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    viewButtons.forEach(btn => btn.classList.remove('active'));
-                    this.classList.add('active');
-                });
-            });
+            // Set default date to today
+            document.getElementById('available-date').value = today;
         });
     </script>
 </body>
