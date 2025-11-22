@@ -1,3 +1,50 @@
+<?php
+session_start();
+require_once 'db_connection.php';
+
+$error = '';
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $email = trim($_POST['email']);
+    $password = $_POST['password'];
+    $role = $_POST['role'];
+    
+    try {
+        // Check if user exists
+        $stmt = $pdo->prepare("SELECT * FROM user WHERE email = ? AND role = ? AND is_active = TRUE");
+        $stmt->execute([$email, $role]);
+        $user = $stmt->fetch();
+        
+        if ($user && password_verify($password, $user['password_hash'])) {
+            // Login successful
+            $_SESSION['user_id'] = $user['user_id'];
+            $_SESSION['email'] = $user['email'];
+            $_SESSION['role'] = $user['role'];
+            
+            // Redirect based on role
+            switch ($role) {
+                case 'patient':
+                    header("Location: patient_dashboard.php");
+                    break;
+                case 'doctor':
+                    header("Location: doctor_dashboard.php");
+                    break;
+                case 'staff':
+                    header("Location: staff_dashboard.php");
+                    break;
+                default:
+                    header("Location: index.php");
+            }
+            exit();
+        } else {
+            $error = "Invalid email, password, or role selection.";
+        }
+    } catch(PDOException $e) {
+        $error = "Database error: " . $e->getMessage();
+    }
+}
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,6 +53,7 @@
     <title>NexusCare - Login</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* Your existing CSS styles remain the same */
         :root {
             --primary: #4d93c2;
             --primary-dark: #1d5a8a;
@@ -222,6 +270,15 @@
             text-decoration: underline;
         }
         
+        .error-message {
+            background-color: #ffebee;
+            color: #c62828;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid #ff6b6b;
+        }
+        
         footer {
             background-color: var(--secondary);
             color: var(--white);
@@ -270,12 +327,18 @@
                 <p class="login-subtitle">Enter your credentials to access your account</p>
             </div>
             
+            <?php if (!empty($error)): ?>
+                <div class="error-message">
+                    <?php echo htmlspecialchars($error); ?>
+                </div>
+            <?php endif; ?>
+            
             <form action="" method="post">
                 <div class="form-group">
                     <label for="email">Email Address</label>
                     <div class="input-with-icon">
                         <i class="fas fa-envelope input-icon"></i>
-                        <input type="email" id="email" name="email" required placeholder="Enter your email address">
+                        <input type="email" id="email" name="email" required placeholder="Enter your email address" value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>">
                     </div>
                 </div>
 
@@ -296,9 +359,9 @@
                         <i class="fas fa-user-tag input-icon"></i>
                         <select id="role" name="role" required>
                             <option value="">-- Select Role --</option>
-                            <option value="patient">Patient</option>
-                            <option value="doctor">Doctor</option>
-                            <option value="staff">Staff</option>
+                            <option value="patient" <?php echo (isset($_POST['role']) && $_POST['role'] == 'patient') ? 'selected' : ''; ?>>Patient</option>
+                            <option value="doctor" <?php echo (isset($_POST['role']) && $_POST['role'] == 'doctor') ? 'selected' : ''; ?>>Doctor</option>
+                            <option value="staff" <?php echo (isset($_POST['role']) && $_POST['role'] == 'staff') ? 'selected' : ''; ?>>Staff</option>
                         </select>
                     </div>
                 </div>
@@ -346,18 +409,6 @@
                 passwordInput.type = 'password';
                 icon.classList.remove('fa-eye-slash');
                 icon.classList.add('fa-eye');
-            }
-        });
-        
-        // Form validation
-        document.querySelector('form').addEventListener('submit', function(e) {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            const role = document.getElementById('role').value;
-            
-            if (!email || !password || !role) {
-                e.preventDefault();
-                alert('Please fill in all required fields.');
             }
         });
     </script>

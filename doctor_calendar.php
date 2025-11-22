@@ -1,3 +1,78 @@
+<?php
+session_start();
+require_once 'db_connection.php';
+
+// Check if user is logged in and is a doctor
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'doctor') {
+    header('Location: login.php');
+    exit();
+}
+
+$doctor_id = $_SESSION['doctor_id'];
+
+// Get doctor information
+$stmt = $pdo->prepare("SELECT * FROM doctor WHERE doctor_id = ?");
+$stmt->execute([$doctor_id]);
+$doctor = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Handle availability form submission
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['available_date'])) {
+    $available_date = $_POST['available_date'];
+    $start_time = $_POST['start_time'];
+    $end_time = $_POST['end_time'];
+    $repeat_weekly = isset($_POST['repeat_weekly']) ? 1 : 0;
+    
+    if ($repeat_weekly) {
+        // Add to doctor_availability table for weekly repetition
+        $day_of_week = strtolower(date('l', strtotime($available_date)));
+        
+        $stmt = $pdo->prepare("
+            INSERT INTO doctor_availability (doctor_id, day_of_week, start_time, end_time) 
+            VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE start_time = VALUES(start_time), end_time = VALUES(end_time)
+        ");
+        $stmt->execute([$doctor_id, $day_of_week, $start_time, $end_time]);
+    } else {
+        // Add to doctor_schedule table for specific date
+        $stmt = $pdo->prepare("
+            INSERT INTO doctor_schedule (doctor_id, date, start_time, end_time, is_available) 
+            VALUES (?, ?, ?, ?, 1)
+        ");
+        $stmt->execute([$doctor_id, $available_date, $start_time, $end_time]);
+    }
+    
+    header('Location: doctor_calendar.php?success=1');
+    exit();
+}
+
+// Get current week's appointments
+$start_of_week = date('Y-m-d', strtotime('monday this week'));
+$end_of_week = date('Y-m-d', strtotime('sunday this week'));
+
+$stmt = $pdo->prepare("
+    SELECT a.*, p.full_name, p.date_of_birth, p.gender
+    FROM appointment a
+    JOIN patient p ON a.patient_id = p.patient_id
+    WHERE a.doctor_id = ? AND a.preferred_date BETWEEN ? AND ?
+    ORDER BY a.preferred_date ASC, a.preferred_time ASC
+");
+$stmt->execute([$doctor_id, $start_of_week, $end_of_week]);
+$appointments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Get doctor's availability for the week
+$stmt = $pdo->prepare("SELECT * FROM doctor_availability WHERE doctor_id = ?");
+$stmt->execute([$doctor_id]);
+$weekly_availability = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Get specific date schedules
+$stmt = $pdo->prepare("
+    SELECT * FROM doctor_schedule 
+    WHERE doctor_id = ? AND date BETWEEN ? AND ? AND is_available = 1
+");
+$stmt->execute([$doctor_id, $start_of_week, $end_of_week]);
+$specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,6 +80,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NexusCare - My Schedule & Appointments</title>
     <style>
+        /* Your existing CSS styles remain the same */
         * {
             margin: 0;
             padding: 0;
@@ -431,7 +507,11 @@
             <div class="welcome-section">
                 <div class="welcome-message">
                     <h1>Doctor Portal</h1>
-                    <p>Welcome, Dr. [Name]!</p>
+                    <p>Welcome, Dr. <?php 
+                        $doctorName = $doctor['full_name'] ?? 'Doctor';
+                        $cleanedName = preg_replace('/^Dr\.\s*/i', '', $doctorName);
+                        echo htmlspecialchars($cleanedName); 
+                    ?>!</p>
                 </div>
                 <a href="logout.php" class="logout-link">Logout</a>
             </div>
@@ -453,7 +533,9 @@
         <div class="page-header">
             <h1>My Appointment Calendar</h1>
             <div class="week-display">
-                Week of: <strong id="currentWeek">Sep 15 - Sep 21, 2025</strong>
+                Week of: <strong id="currentWeek"><?php 
+                    echo date('M j', strtotime($start_of_week)) . ' - ' . date('M j, Y', strtotime($end_of_week)); 
+                ?></strong>
             </div>
         </div>
         
@@ -471,51 +553,54 @@
                 <p>Available slots are shown in <span style="color:#28a745;">GREEN</span>, and booked appointments in <span style="color:#4d93c2ff;">BLUE</span>.</p>
                 
                 <div class="calendar-grid">
-                    <div class="calendar-day">
-                        <div class="calendar-day-header">Mon, 15 Sep</div>
-                        <div class="appointment-slot">10:15 AM - Michael Chen</div>
-                        <div class="available-slot">2:00 PM - Available</div>
-                        <div class="available-slot">4:30 PM - Available</div>
-                    </div>
-                    <div class="calendar-day">
-                        <div class="calendar-day-header">Tue, 16 Sep</div>
-                        <div class="appointment-slot">9:00 AM - Sarah Johnson</div>
-                        <div class="appointment-slot">2:00 PM - Emma Williams</div>
-                        <div class="available-slot">4:00 PM - Available</div>
-                    </div>
-                    <div class="calendar-day">
-                        <div class="calendar-day-header">Wed, 17 Sep</div>
-                        <div class="appointment-slot">11:00 AM - Robert Garcia</div>
-                        <div class="available-slot">1:30 PM - Available</div>
-                        <div class="available-slot">3:45 PM - Available</div>
-                    </div>
-                    <div class="calendar-day">
-                        <div class="calendar-day-header">Thu, 18 Sep</div>
-                        <div class="available-slot">10:00 AM - Available</div>
-                        <div class="available-slot">1:15 PM - Available</div>
-                        <div class="appointment-slot">3:30 PM - Lisa Brown</div>
-                    </div>
-                    <div class="calendar-day">
-                        <div class="calendar-day-header">Fri, 19 Sep</div>
-                        <div class="appointment-slot">9:30 AM - David Wilson</div>
-                        <div class="available-slot">11:45 AM - Available</div>
-                        <div class="available-slot">2:30 PM - Available</div>
-                    </div>
-                    <div class="calendar-day">
-                        <div class="calendar-day-header">Sat, 20 Sep</div>
-                        <div class="available-slot">10:00 AM - Available</div>
-                        <div class="available-slot">12:00 PM - Available</div>
-                        <div style="color:#666; font-size:12px; text-align:center; margin-top:10px;">No afternoon appointments</div>
-                    </div>
-                    <div class="calendar-day">
-                        <div class="calendar-day-header">Sun, 21 Sep</div>
-                        <div style="color:#666; font-size:12px; text-align:center; margin-top:20px;">No appointments scheduled</div>
-                    </div>
+                    <?php
+                    $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                    foreach ($days as $index => $day) {
+                        $current_date = date('Y-m-d', strtotime($start_of_week . " +$index days"));
+                        $day_name = date('D, j M', strtotime($current_date));
+                        
+                        echo "<div class='calendar-day'>";
+                        echo "<div class='calendar-day-header'>$day_name</div>";
+                        
+                        // Display appointments for this day
+                        $day_appointments = array_filter($appointments, function($apt) use ($current_date) {
+                            return $apt['preferred_date'] == $current_date;
+                        });
+                        
+                        foreach ($day_appointments as $apt) {
+                            $time = date('g:i A', strtotime($apt['preferred_time']));
+                            echo "<div class='appointment-slot'>$time - " . htmlspecialchars($apt['full_name']) . "</div>";
+                        }
+                        
+                        // Display available slots
+                        $day_of_week = strtolower($day);
+                        $available_today = array_filter($weekly_availability, function($avail) use ($day_of_week) {
+                            return $avail['day_of_week'] == $day_of_week && $avail['is_available'] == 1;
+                        });
+                        
+                        foreach ($available_today as $slot) {
+                            $start = date('g:i A', strtotime($slot['start_time']));
+                            $end = date('g:i A', strtotime($slot['end_time']));
+                            echo "<div class='available-slot'>$start - $end - Available</div>";
+                        }
+                        
+                        if (empty($day_appointments)) {
+                            echo "<div style='color:#666; font-size:12px; text-align:center; margin-top:20px;'>No appointments</div>";
+                        }
+                        
+                        echo "</div>";
+                    }
+                    ?>
                 </div>
             </div>
             
             <div class="availability-form">
                 <h2>Set Your Availability</h2>
+                <?php if (isset($_GET['success'])): ?>
+                    <div style="background-color: #d4edda; color: #155724; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
+                        Availability updated successfully!
+                    </div>
+                <?php endif; ?>
                 <form action="" method="post">
                     <div class="form-group">
                         <label for="available-date">Date:</label>
@@ -551,59 +636,25 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td>Mon, 15 Sep - 10:15 AM</td>
-                        <td>Michael Chen</td>
-                        <td>Follow-up</td>
-                        <td><span class="status confirmed">Confirmed</span></td>
-                        <td class="action-links">
-                            <a href="patient_details.php?patient_id=2">View</a> | 
-                            <a href="#">Reschedule</a> | 
-                            <a href="#">Cancel</a>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>Tue, 16 Sep - 2:00 PM</td>
-                        <td>Emma Williams</td>
-                        <td>New Symptoms</td>
-                        <td><span class="status confirmed">Confirmed</span></td>
-                        <td class="action-links">
-                            <a href="patient_details.php?patient_id=3">View</a> | 
-                            <a href="#">Reschedule</a> | 
-                            <a href="#">Cancel</a>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>Wed, 17 Sep - 11:00 AM</td>
-                        <td>Available Slot</td>
-                        <td>-</td>
-                        <td><span class="status available">Available</span></td>
-                        <td class="action-links">
-                            <a href="#">Block Time</a>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>Thu, 18 Sep - 3:30 PM</td>
-                        <td>Lisa Brown</td>
-                        <td>Annual Checkup</td>
-                        <td><span class="status confirmed">Confirmed</span></td>
-                        <td class="action-links">
-                            <a href="patient_details.php?patient_id=5">View</a> | 
-                            <a href="#">Reschedule</a> | 
-                            <a href="#">Cancel</a>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>Fri, 19 Sep - 9:30 AM</td>
-                        <td>David Wilson</td>
-                        <td>Vaccination</td>
-                        <td><span class="status confirmed">Confirmed</span></td>
-                        <td class="action-links">
-                            <a href="patient_details.php?patient_id=6">View</a> | 
-                            <a href="#">Reschedule</a> | 
-                            <a href="#">Cancel</a>
-                        </td>
-                    </tr>
+                    <?php if (count($appointments) > 0): ?>
+                        <?php foreach ($appointments as $appointment): ?>
+                            <tr>
+                                <td><?php echo date('D, j M - g:i A', strtotime($appointment['preferred_date'] . ' ' . $appointment['preferred_time'])); ?></td>
+                                <td><?php echo htmlspecialchars($appointment['full_name']); ?></td>
+                                <td><?php echo htmlspecialchars($appointment['reason']); ?></td>
+                                <td><span class="status confirmed"><?php echo ucfirst($appointment['status']); ?></span></td>
+                                <td class="action-links">
+                                    <a href="patient_details.php?patient_id=<?php echo $appointment['patient_id']; ?>">View</a> | 
+                                    <a href="#">Reschedule</a> | 
+                                    <a href="#">Cancel</a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="5" style="text-align: center;">No appointments scheduled for this week.</td>
+                        </tr>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </section>
@@ -611,7 +662,7 @@
 
     <footer>
         <div class="footer-container">
-            <p>&copy; 2025 NexusCare. All rights reserved.</p>
+            <p>&copy; 2025 Nexus Care. All rights reserved.</p>
         </div>
     </footer>
 

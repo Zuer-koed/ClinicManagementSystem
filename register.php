@@ -1,3 +1,64 @@
+<?php
+session_start();
+require_once 'db_connection.php';
+
+$error = '';
+$success = '';
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $name = trim($_POST['name']);
+    $email = trim($_POST['email']);
+    $phone = trim($_POST['phone']);
+    $dob = $_POST['dob'];
+    $address = trim($_POST['address']);
+    $password = $_POST['password'];
+    $confirm_password = $_POST['confirm_password'];
+    
+    // Validation
+    if (empty($name) || empty($email) || empty($dob) || empty($password) || empty($confirm_password)) {
+        $error = "Please fill in all required fields.";
+    } elseif ($password !== $confirm_password) {
+        $error = "Passwords do not match.";
+    } elseif (strlen($password) < 8) {
+        $error = "Password must be at least 8 characters long.";
+    } else {
+        try {
+            // Check if email already exists
+            $stmt = $pdo->prepare("SELECT user_id FROM user WHERE email = ?");
+            $stmt->execute([$email]);
+            
+            if ($stmt->fetch()) {
+                $error = "Email already registered. Please use a different email or login.";
+            } else {
+                // Begin transaction
+                $pdo->beginTransaction();
+                
+                // Insert into user table
+                $password_hash = password_hash($password, PASSWORD_DEFAULT);
+                $stmt = $pdo->prepare("INSERT INTO user (email, password_hash, role, phone_number) VALUES (?, ?, 'patient', ?)");
+                $stmt->execute([$email, $password_hash, $phone]);
+                $user_id = $pdo->lastInsertId();
+                
+                // Insert into patient table
+                $stmt = $pdo->prepare("INSERT INTO patient (user_id, full_name, date_of_birth, address, phone_number) VALUES (?, ?, ?, ?, ?)");
+                $stmt->execute([$user_id, $name, $dob, $address, $phone]);
+                
+                // Commit transaction
+                $pdo->commit();
+                
+                $success = "Registration successful! You can now login to your account.";
+                
+                // Clear form
+                $_POST = array();
+            }
+        } catch(PDOException $e) {
+            $pdo->rollBack();
+            $error = "Registration failed: " . $e->getMessage();
+        }
+    }
+}
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,6 +67,7 @@
     <title>NexusCare - Patient Registration</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* Your existing CSS styles remain the same */
         :root {
             --primary: #4d93c2;
             --primary-dark: #1d5a8a;
@@ -235,6 +297,24 @@
             text-decoration: underline;
         }
         
+        .error-message {
+            background-color: #ffebee;
+            color: #c62828;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid #ff6b6b;
+        }
+        
+        .success-message {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid #4caf50;
+        }
+        
         footer {
             background-color: var(--secondary);
             color: var(--white);
@@ -277,12 +357,24 @@
                 <p class="register-subtitle">Create your account to access healthcare services</p>
             </div>
             
+            <?php if (!empty($error)): ?>
+                <div class="error-message">
+                    <?php echo htmlspecialchars($error); ?>
+                </div>
+            <?php endif; ?>
+            
+            <?php if (!empty($success)): ?>
+                <div class="success-message">
+                    <?php echo htmlspecialchars($success); ?>
+                </div>
+            <?php endif; ?>
+            
             <form action="" method="post">
                 <div class="form-group">
                     <label for="name">Full Name</label>
                     <div class="input-with-icon">
                         <i class="fas fa-user input-icon"></i>
-                        <input type="text" id="name" name="name" required placeholder="Enter your full name">
+                        <input type="text" id="name" name="name" required placeholder="Enter your full name" value="<?php echo isset($_POST['name']) ? htmlspecialchars($_POST['name']) : ''; ?>">
                     </div>
                 </div>
 
@@ -290,7 +382,7 @@
                     <label for="email">Email Address</label>
                     <div class="input-with-icon">
                         <i class="fas fa-envelope input-icon"></i>
-                        <input type="email" id="email" name="email" required placeholder="Enter your email address">
+                        <input type="email" id="email" name="email" required placeholder="Enter your email address" value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>">
                     </div>
                 </div>
 
@@ -298,7 +390,7 @@
                     <label for="phone">Phone Number</label>
                     <div class="input-with-icon">
                         <i class="fas fa-phone input-icon"></i>
-                        <input type="tel" id="phone" name="phone" placeholder="Enter your phone number">
+                        <input type="tel" id="phone" name="phone" placeholder="Enter your phone number" value="<?php echo isset($_POST['phone']) ? htmlspecialchars($_POST['phone']) : ''; ?>">
                     </div>
                 </div>
 
@@ -306,13 +398,13 @@
                     <label for="dob">Date of Birth</label>
                     <div class="input-with-icon">
                         <i class="fas fa-calendar input-icon"></i>
-                        <input type="date" id="dob" name="dob" required>
+                        <input type="date" id="dob" name="dob" required value="<?php echo isset($_POST['dob']) ? htmlspecialchars($_POST['dob']) : ''; ?>">
                     </div>
                 </div>
 
                 <div class="form-group">
                     <label for="address">Address</label>
-                    <textarea id="address" name="address" rows="3" placeholder="Enter your full address"></textarea>
+                    <textarea id="address" name="address" rows="3" placeholder="Enter your full address"><?php echo isset($_POST['address']) ? htmlspecialchars($_POST['address']) : ''; ?></textarea>
                 </div>
 
                 <div class="form-group">
@@ -438,33 +530,6 @@
             } else {
                 matchElement.textContent = 'Passwords do not match';
                 matchElement.style.color = 'var(--accent)';
-            }
-        });
-        
-        // Form validation
-        document.querySelector('form').addEventListener('submit', function(e) {
-            const name = document.getElementById('name').value;
-            const email = document.getElementById('email').value;
-            const dob = document.getElementById('dob').value;
-            const password = document.getElementById('password').value;
-            const confirmPassword = document.getElementById('confirm_password').value;
-            
-            if (!name || !email || !dob || !password || !confirmPassword) {
-                e.preventDefault();
-                alert('Please fill in all required fields.');
-                return;
-            }
-            
-            if (password !== confirmPassword) {
-                e.preventDefault();
-                alert('Passwords do not match.');
-                return;
-            }
-            
-            if (password.length < 8) {
-                e.preventDefault();
-                alert('Password must be at least 8 characters long.');
-                return;
             }
         });
     </script>
