@@ -1,3 +1,68 @@
+<?php
+session_start();
+require_once 'db_connection.php';
+
+// Check if user is logged in and is a staff member
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'staff') {
+    header('Location: login.php');
+    exit();
+}
+
+$staff_id = $_SESSION['user_id'];
+
+// Get staff information
+$stmt = $pdo->prepare("SELECT * FROM staff WHERE staff_id = ?");
+$stmt->execute([$staff_id]);
+$staff = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Get today's date
+$today = date('Y-m-d');
+
+// Get appointment statistics
+$pendingCount = $pdo->query("SELECT COUNT(*) FROM appointment WHERE status = 'pending'")->fetchColumn();
+$confirmedToday = $pdo->query("SELECT COUNT(*) FROM appointment WHERE status = 'confirmed' AND preferred_date = '$today'")->fetchColumn();
+$completedToday = $pdo->query("SELECT COUNT(*) FROM appointment WHERE status = 'completed' AND preferred_date = '$today'")->fetchColumn();
+$walkinCount = $pdo->query("SELECT COUNT(*) FROM appointment WHERE status = 'walk_in' AND preferred_date = '$today'")->fetchColumn();
+
+// Get emergency cases for today
+$emergencyStmt = $pdo->prepare("
+    SELECT a.*, p.full_name as patient_name, d.full_name as doctor_name 
+    FROM appointment a 
+    JOIN patient p ON a.patient_id = p.patient_id 
+    JOIN doctor d ON a.doctor_id = d.doctor_id 
+    WHERE a.status = 'emergency' AND a.preferred_date = ? 
+    LIMIT 1
+");
+$emergencyStmt->execute([$today]);
+$emergencyCase = $emergencyStmt->fetch(PDO::FETCH_ASSOC);
+
+// Get today's master schedule
+$scheduleStmt = $pdo->prepare("
+    SELECT d.full_name as doctor_name, a.preferred_time, a.preferred_date, 
+           p.full_name as patient_name, a.status
+    FROM appointment a 
+    JOIN doctor d ON a.doctor_id = d.doctor_id 
+    LEFT JOIN patient p ON a.patient_id = p.patient_id 
+    WHERE a.preferred_date = ? AND a.status IN ('confirmed', 'emergency', 'walk_in')
+    ORDER BY d.full_name, a.preferred_time
+");
+$scheduleStmt->execute([$today]);
+$todayAppointments = $scheduleStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Get recent activity
+$activityStmt = $pdo->query("
+    SELECT * FROM appointment 
+    WHERE preferred_date = '$today' 
+    ORDER BY created_at DESC 
+    LIMIT 5
+");
+$recentActivity = $activityStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Get all doctors for schedule
+$doctorsStmt = $pdo->query("SELECT * FROM doctor LIMIT 3");
+$doctors = $doctorsStmt->fetchAll(PDO::FETCH_ASSOC);
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -396,7 +461,7 @@
             <div class="welcome-section">
                 <div class="welcome-message">
                     <h1>Staff Portal</h1>
-                    <p>Welcome, Staff Member!</p>
+                    <p>Welcome, <?php echo htmlspecialchars($staff['full_name'] ?? 'Staff Member'); ?>!</p>
                 </div>
                 <a href="logout.php" class="logout-link">Logout</a>
             </div>
@@ -406,7 +471,8 @@
                     <ul>
                         <li><a href="staff_dashboard.php" class="active">Dashboard</a></li>
                         <li><a href="staff_manage_appointment.php">Manage Appointments</a></li>
-                        <li><a href="patient_list.php">Patient List</a></li>
+                        <li><a href="staff_patient_list.php">Patient List</a></li>
+                        <li><a href="staff_profile.php">My Profile</a></li>
                     </ul>
                 </div>
             </nav>
@@ -417,22 +483,24 @@
         <div class="page-header">
             <h1>Today's Operations Overview</h1>
             <div class="date-display">
-                Today's Date: <strong id="currentDate">[Dynamic Date]</strong>
+                Today's Date: <strong id="currentDate"><?php echo date('l, F j, Y'); ?></strong>
             </div>
         </div>
 
         <!-- Emergency Alerts Section -->
+        <?php if ($emergencyCase): ?>
         <section class="section-card">
             <h2>High Priority Alerts</h2>
             <div class="alert-emergency">
                 <h4>🚨 Emergency Case</h4>
-                <p><strong>Patient:</strong> James Wilson</p>
-                <p><strong>Time Arrived:</strong> 10:30 AM</p>
-                <p><strong>Assigned Doctor:</strong> Dr. Smith</p>
+                <p><strong>Patient:</strong> <?php echo htmlspecialchars($emergencyCase['patient_name']); ?></p>
+                <p><strong>Time:</strong> <?php echo date('g:i A', strtotime($emergencyCase['preferred_time'])); ?></p>
+                <p><strong>Assigned Doctor:</strong> <?php echo htmlspecialchars($emergencyCase['doctor_name']); ?></p>
                 <p><strong>Status:</strong> In treatment</p>
                 <a href="staff_manage_appointment.php" class="btn-stat">Manage Emergency Cases</a>
             </div>
         </section>
+        <?php endif; ?>
 
         <!-- Appointment Statistics -->
         <section class="section-card">
@@ -440,22 +508,22 @@
             <div class="stats-grid">
                 <div class="stat-card">
                     <h4>Pending Requests</h4>
-                    <p>5</p>
+                    <p><?php echo $pendingCount; ?></p>
                     <a href="staff_manage_appointment.php?filter=pending" class="btn-stat">Review Pending</a>
                 </div>
                 <div class="stat-card">
                     <h4>Confirmed Today</h4>
-                    <p>12</p>
+                    <p><?php echo $confirmedToday; ?></p>
                     <a href="staff_manage_appointment.php?filter=confirmed" class="btn-stat">View All</a>
                 </div>
                 <div class="stat-card">
                     <h4>Walk-in Patients</h4>
-                    <p>3</p>
+                    <p><?php echo $walkinCount; ?></p>
                     <a href="staff_manage_appointment.php?filter=walk_in" class="btn-stat">Manage Walk-ins</a>
                 </div>
                 <div class="stat-card">
                     <h4>Completed Today</h4>
-                    <p>8</p>
+                    <p><?php echo $completedToday; ?></p>
                     <a href="staff_manage_appointment.php?filter=completed" class="btn-stat">View Completed</a>
                 </div>
             </div>
@@ -479,39 +547,44 @@
                     </tr>
                 </thead>
                 <tbody>
+                    <?php foreach ($doctors as $doctor): ?>
                     <tr>
-                        <td><strong>Dr. Smith</strong></td>
-                        <td><span class="appointment-booked">Sarah Johnson</span></td>
-                        <td><span class="appointment-booked">Michael Chen</span></td>
-                        <td><span class="appointment-available">Available</span></td>
-                        <td><span class="appointment-lunch">Lunch</span></td>
-                        <td><span class="appointment-booked">Emma Williams</span></td>
-                        <td><span class="appointment-emergency">James Wilson</span></td>
-                        <td><span class="appointment-available">Available</span></td>
-                        <td><span class="appointment-booked">Robert Garcia</span></td>
+                        <td><strong><?php echo htmlspecialchars($doctor['full_name']); ?></strong></td>
+                        <?php
+                        $timeSlots = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
+                        foreach ($timeSlots as $slot):
+                            $appointmentFound = false;
+                            $appointmentType = '';
+                            $patientName = '';
+                            
+                            foreach ($todayAppointments as $appt) {
+                                if ($appt['doctor_name'] === $doctor['full_name'] && 
+                                    date('H:i', strtotime($appt['preferred_time'])) === $slot) {
+                                    $appointmentFound = true;
+                                    $appointmentType = $appt['status'];
+                                    $patientName = $appt['patient_name'] ?? 'Unknown';
+                                    break;
+                                }
+                            }
+                        ?>
+                        <td>
+                            <?php if ($slot === '12:00'): ?>
+                                <span class="appointment-lunch">Lunch</span>
+                            <?php elseif ($appointmentFound): ?>
+                                <?php if ($appointmentType === 'emergency'): ?>
+                                    <span class="appointment-emergency"><?php echo htmlspecialchars($patientName); ?></span>
+                                <?php elseif ($appointmentType === 'walk_in'): ?>
+                                    <span class="appointment-available">Walk-in</span>
+                                <?php else: ?>
+                                    <span class="appointment-booked"><?php echo htmlspecialchars($patientName); ?></span>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <span class="appointment-available">Available</span>
+                            <?php endif; ?>
+                        </td>
+                        <?php endforeach; ?>
                     </tr>
-                    <tr>
-                        <td><strong>Dr. Johnson</strong></td>
-                        <td><span class="appointment-available">Available</span></td>
-                        <td><span class="appointment-booked">Lisa Thompson</span></td>
-                        <td><span class="appointment-available">Available</span></td>
-                        <td><span class="appointment-lunch">Lunch</span></td>
-                        <td><span class="appointment-booked">David Brown</span></td>
-                        <td><span class="appointment-booked">Maria Garcia</span></td>
-                        <td><span class="appointment-booked">Walk-in Slot</span></td>
-                        <td><span class="appointment-available">Available</span></td>
-                    </tr>
-                    <tr>
-                        <td><strong>Dr. Williams</strong></td>
-                        <td><span class="appointment-booked">Jennifer Lee</span></td>
-                        <td><span class="appointment-available">Available</span></td>
-                        <td><span class="appointment-booked">Thomas Clark</span></td>
-                        <td><span class="appointment-lunch">Lunch</span></td>
-                        <td><span class="appointment-booked">Walk-in Slot</span></td>
-                        <td><span class="appointment-available">Available</span></td>
-                        <td><span class="appointment-booked">Susan Adams</span></td>
-                        <td><span class="appointment-available">Available</span></td>
-                    </tr>
+                    <?php endforeach; ?>
                 </tbody>
             </table>
         </section>
@@ -531,21 +604,22 @@
         <section class="section-card">
             <h2>Recent Activity</h2>
             <div class="activity-log">
-                <div class="activity-item">
-                    <span class="activity-time">10:30 AM:</span> Emergency case registered - James Wilson
-                </div>
-                <div class="activity-item">
-                    <span class="activity-time">10:15 AM:</span> Walk-in patient registered - Maria Garcia
-                </div>
-                <div class="activity-item">
-                    <span class="activity-time">09:45 AM:</span> Appointment confirmed - David Brown with Dr. Johnson
-                </div>
-                <div class="activity-item">
-                    <span class="activity-time">09:30 AM:</span> Patient checked in - Sarah Johnson
-                </div>
-                <div class="activity-item">
-                    <span class="activity-time">09:00 AM:</span> Clinic opened for the day
-                </div>
+                <?php if (count($recentActivity) > 0): ?>
+                    <?php foreach ($recentActivity as $activity): ?>
+                        <div class="activity-item">
+                            <span class="activity-time"><?php echo date('g:i A', strtotime($activity['created_at'])); ?>:</span>
+                            Appointment <?php echo $activity['status']; ?> - 
+                            <?php 
+                            $patientStmt = $pdo->prepare("SELECT full_name FROM patient WHERE patient_id = ?");
+                            $patientStmt->execute([$activity['patient_id']]);
+                            $patient = $patientStmt->fetch(PDO::FETCH_ASSOC);
+                            echo htmlspecialchars($patient['full_name'] ?? 'Unknown Patient');
+                            ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="activity-item">No recent activity for today.</div>
+                <?php endif; ?>
             </div>
         </section>
     </main>
@@ -555,14 +629,5 @@
             <p>&copy; 2025 NexusCare. All rights reserved.</p>
         </div>
     </footer>
-
-    <script>
-        // Set current date
-        document.addEventListener('DOMContentLoaded', function() {
-            const today = new Date();
-            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-            document.getElementById('currentDate').textContent = today.toLocaleDateString('en-US', options);
-        });
-    </script>
 </body>
 </html>
