@@ -3,13 +3,12 @@
 session_start();
 require_once 'db_connection.php';
 
-// Check if user is logged in (you might want to add this)
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit();
-}
 
-// Get patient data based on logged-in user
+$_SESSION['user_id'] = 2;
+$_SESSION['role'] = 'patient';
+
+
+
 $user_id = $_SESSION['user_id'];
 
 try {
@@ -35,7 +34,7 @@ try {
     $patient = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if (!$patient) {
-        die("Patient profile not found. Please contact administrator.");
+        die("Patient profile not found for test user. Please check your test data.");
     }
     
 } catch(PDOException $e) {
@@ -43,14 +42,16 @@ try {
     die("Error loading profile data. Please try again later.");
 }
 
-// Format date of birth for display
-$formatted_dob = date('F j, Y', strtotime($patient['date_of_birth']));
+// Format date of birth for display (if not null)
+$formatted_dob = $patient['date_of_birth']
+    ? date('F j, Y', strtotime($patient['date_of_birth']))
+    : 'N/A';
 
 // Format patient ID for display
 $display_patient_id = "P-" . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
 
 // Format emergency contact
-$emergency_contact = $patient['emergency_contact_name'] . " (" . $patient['emergency_contact_phone'] . ")";
+$emergency_contact = trim(($patient['emergency_contact_name'] ?? '') . " (" . ($patient['emergency_contact_phone'] ?? '') . ")");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -417,7 +418,7 @@ $emergency_contact = $patient['emergency_contact_name'] . " (" . $patient['emerg
         <div class="profile-section">
             <h2 class="section-title">Personal Details</h2>
             
-            <!-- Desktop Table View -->
+           
             <table class="profile-table" aria-label="Patient profile information">
                 <tr>
                     <th scope="row">Patient ID</th>

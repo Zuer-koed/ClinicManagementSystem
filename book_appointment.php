@@ -2,16 +2,14 @@
 session_start();
 require_once 'db_connection.php';
 
-// Check if user is logged in
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'patient') {
-    header("Location: login.php");
-    exit();
-}
+
+$_SESSION['user_id'] = 2;
+$_SESSION['role'] = 'patient';
 
 $success = false;
 $error   = "";
 
-// Fetch patient details from database (for welcome name)
+
 try {
     $stmt = $pdo->prepare("
         SELECT p.full_name, p.patient_id 
@@ -20,24 +18,24 @@ try {
     ");
     $stmt->execute([$_SESSION['user_id']]);
     $patient = $stmt->fetch(PDO::FETCH_ASSOC);
-    
+
     if (!$patient) {
-        header("Location: logout.php");
-        exit();
+       
+        die('Patient profile not found for test user (user_id=2).');
     }
     
     $patient_name = $patient['full_name'];
     $patient_id   = $patient['patient_id'];
 
-    // Handle form submission
+    
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $date   = $_POST['date'] ?? null;
         $time   = $_POST['time'] ?? null;
         $reason = $_POST['reason'] ?? null;
 
         if ($date && $time && $reason) {
-            // TODO: you can change this to select doctor from a dropdown
-            $doctor_id = 1; // default doctor
+           
+            $doctor_id = 1; 
 
             $insert = $pdo->prepare("
                 INSERT INTO appointment 
@@ -377,8 +375,7 @@ try {
             }
         }
     </style>
-</head>
-<body>
+<<body>
     <header>
         <div class="header-container">
             <img src="Logo.png" alt="Nexus Care Clinic Logo" class="logo">
@@ -414,11 +411,6 @@ try {
             <h2 class="section-title">Appointment Request Form</h2>
             
             <div class="form-container">
-                <div class="alert alert-success <?php echo $success ? '' : 'd-none'; ?>" id="successMessage" role="alert">
-                    <h4 class="alert-heading">Success!</h4>
-                    Your appointment request has been submitted successfully! Our staff will contact you within 24-48 hours to confirm.
-                </div>
-
                 <?php if ($error): ?>
                     <div class="alert alert-danger" role="alert">
                         <?php echo htmlspecialchars($error); ?>
@@ -452,7 +444,7 @@ try {
                     </div>
                     
                     <div class="button-group">
-                        <button type="submit" class="btn btn-primary">Request Appointment</button>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">Request Appointment</button>
                         <button type="reset" class="btn btn-secondary">Clear Form</button>
                         <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#helpModal">
                             Need Help?
@@ -494,6 +486,7 @@ try {
         </div>
     </footer>
 
+   
     <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -522,6 +515,68 @@ try {
         </div>
     </div>
 
+    
+    <div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-success">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title" id="successModalLabel">Appointment Submitted</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    Your appointment request has been submitted successfully.<br>
+                    Our staff will contact you within 24-48 hours to confirm your appointment.
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+    
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('appointmentForm');
+        const loader = document.getElementById('loadingIndicator');
+        const submitBtn = document.getElementById('submitBtn');
+
+        
+        if (form) {
+            form.addEventListener('submit', function (e) {
+               
+                e.preventDefault();
+
+                
+                if (loader) {
+                    loader.classList.remove('d-none');
+                }
+
+               
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Submitting...';
+                }
+
+          
+                setTimeout(function () {
+                    form.submit();
+                }, 1350); 
+            });
+        }
+
+        <?php if ($success): ?>
+        const successModalEl = document.getElementById('successModal');
+        if (successModalEl) {
+            const successModal = new bootstrap.Modal(successModalEl);
+            successModal.show();
+
+            setTimeout(function () {
+                successModal.hide();
+            }, 1500); 
+        }
+        <?php endif; ?>
+    });
+</script>
+
 </body>
 </html>

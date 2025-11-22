@@ -2,14 +2,14 @@
 session_start();
 require_once 'db_connection.php';
 
-// Check if user is logged in
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'patient') {
-    header("Location: login.php");
-    exit();
-}
+
+
+$_SESSION['user_id'] = 2;
+$_SESSION['role'] = 'patient';
+
 
 try {
-    // Get patient info
+    
     $stmt = $pdo->prepare("
         SELECT p.full_name, p.patient_id
         FROM patient p
@@ -19,14 +19,27 @@ try {
     $patient = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$patient) {
-        header("Location: logout.php");
-        exit();
+        die('Patient profile not found for test user (user_id=2).');
     }
 
     $patient_name = $patient['full_name'];
     $patient_id   = $patient['patient_id'];
 
-    // Get all appointments for this patient
+    
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_id'])) {
+        $cancel_id = (int)$_POST['cancel_id'];
+
+        $cancelStmt = $pdo->prepare("
+            UPDATE appointment
+            SET status = 'cancelled'
+            WHERE appointment_id = ?
+              AND patient_id = ?
+              AND status = 'pending'
+        ");
+        $cancelStmt->execute([$cancel_id, $patient_id]);
+    }
+
+    
     $appointmentStmt = $pdo->prepare("
         SELECT 
             a.appointment_id,
@@ -402,11 +415,17 @@ try {
                                     <?php echo ucfirst(htmlspecialchars($row['status'])); ?>
                                 </td>
                                 <td>
-                                    <?php if ($row['status'] === 'pending'): ?>
-                                        <button class="btn-cancel">Cancel</button>
-                                    <?php else: ?>
-                                        <button class="btn-cancel" disabled>Cancel</button>
-                                    <?php endif; ?>
+                                    <form method="post" style="display:inline;">
+                                        <input type="hidden" name="cancel_id" value="<?php echo (int)$row['appointment_id']; ?>">
+                                        <button
+                                            type="submit"
+                                            class="btn-cancel"
+                                            <?php echo ($row['status'] === 'pending') ? '' : 'disabled'; ?>
+                                            onclick="return this.disabled ? false : confirm('Are you sure you want to cancel this appointment?');"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -421,17 +440,5 @@ try {
             <p>&copy; 2025 Nexus Care. All rights reserved.</p>
         </div>
     </footer>
-
-    <script>
-        // Keep your original simple confirm
-        document.querySelectorAll('.btn-cancel').forEach(btn => {
-            btn.onclick = function() {
-                if (!this.disabled) {
-                    return confirm('Are you sure you want to cancel this appointment?');
-                }
-                return false;
-            };
-        });
-    </script>
 </body>
 </html>

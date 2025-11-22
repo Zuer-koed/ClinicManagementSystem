@@ -2,14 +2,13 @@
 session_start();
 require_once 'db_connection.php';
 
-// Check if user is logged in
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'patient') {
-    header("Location: login.php");
-    exit();
-}
+
+$_SESSION['user_id'] = 2;
+$_SESSION['role'] = 'patient';
+
 
 try {
-    // Get patient info
+    
     $stmt = $pdo->prepare("
         SELECT p.full_name, p.patient_id
         FROM patient p
@@ -19,14 +18,14 @@ try {
     $patient = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$patient) {
-        header("Location: logout.php");
-        exit();
+       
+        die("Patient profile not found for test user.");
     }
 
     $patient_name = $patient['full_name'];
     $patient_id   = $patient['patient_id'];
 
-    // Get medical history
+    
     $mhStmt = $pdo->prepare("
         SELECT 
             mh.diagnosis_date,

@@ -3,9 +3,9 @@
 // Simple PDO connection for XAMPP/MySQL
 
 $host = "localhost";
-$dbname = "nexuscare";    //  改成你實際的資料庫名稱
-$username = "root";       // XAMPP 預設
-$password = "";           // XAMPP 預設空字串
+$dbname = "nexuscare";    
+$username = "root";      
+$password = "";           
 
 try {
     $pdo = new PDO(
