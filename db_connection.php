@@ -2,7 +2,7 @@
 // db_connection.php
 class Database {
     private $host = "localhost";
-    private $db_name = "nexuscare";
+    private $db_name = "nexus_care";
     private $username = "root";  // Default XAMPP username
     private $password = "";      // Default XAMPP password (empty)
     public $conn;
