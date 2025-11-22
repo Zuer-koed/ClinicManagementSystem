@@ -2,15 +2,29 @@
 session_start();
 require_once 'db_connection.php';
 
-
-$_SESSION['user_id'] = 2;
-$_SESSION['role'] = 'patient';
-
 $success = false;
 $error   = "";
 
+// -----------------------------------------
+// 🔐 1. 檢查是否有登入
+// -----------------------------------------
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
+    header("Location: login.php?error=please_login");
+    exit();
+}
+
+// -----------------------------------------
+// 🔐 2. 限制只有 patient 角色可以進來
+// -----------------------------------------
+if ($_SESSION['role'] !== 'patient') {
+    header("Location: login.php?error=unauthorized");
+    exit();
+}
 
 try {
+    // -----------------------------------------
+    // 🔍 找 patient 资料
+    // -----------------------------------------
     $stmt = $pdo->prepare("
         SELECT p.full_name, p.patient_id 
         FROM patient p 
@@ -20,30 +34,41 @@ try {
     $patient = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$patient) {
-       
-        die('Patient profile not found for test user (user_id=2).');
+        header("Location: login.php?error=no_patient_profile");
+        exit();
     }
     
     $patient_name = $patient['full_name'];
     $patient_id   = $patient['patient_id'];
 
-    
+    // -----------------------------------------
+    // 🔍 取得所有医生名单（用于 Preferred Doctor）
+    // -----------------------------------------
+    $doctorStmt = $pdo->prepare("SELECT doctor_id, full_name FROM doctor ORDER BY full_name ASC");
+    $doctorStmt->execute();
+    $doctors = $doctorStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // -----------------------------------------
+    // 📝 4. 处理表单提交
+    // -----------------------------------------
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $date   = $_POST['date'] ?? null;
-        $time   = $_POST['time'] ?? null;
+        $date   = $_POST['date']   ?? null;
+        $time   = $_POST['time']   ?? null;
         $reason = $_POST['reason'] ?? null;
+        $preferred_doctor = $_POST['preferred_doctor'] ?? "";
+
+        // notes 存 Preferred Doctor（不影响 staff 后台）
+        $notes = $preferred_doctor ? ("Preferred doctor: " . $preferred_doctor) : null;
 
         if ($date && $time && $reason) {
-           
-            $doctor_id = 1; 
 
             $insert = $pdo->prepare("
                 INSERT INTO appointment 
-                    (patient_id, doctor_id, preferred_date, preferred_time, reason, status)
+                    (patient_id, preferred_date, preferred_time, reason, status, notes)
                 VALUES 
-                    (?, ?, ?, ?, ?, 'pending')
+                    (?, ?, ?, ?, 'pending', ?)
             ");
-            $insert->execute([$patient_id, $doctor_id, $date, $time, $reason]);
+            $insert->execute([$patient_id, $date, $time, $reason, $notes]);
 
             $success = true;
         } else {
@@ -52,11 +77,12 @@ try {
     }
 
 } catch (PDOException $e) {
-    error_log("Database error: " . $e->getMessage());
+    error_log("Database error in book_appointment: " . $e->getMessage());
     $patient_name = "Patient";
     $error = "An error occurred. Please try again later.";
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -375,7 +401,7 @@ try {
             }
         }
     </style>
-<<body>
+<body>
     <header>
         <div class="header-container">
             <img src="Logo.png" alt="Nexus Care Clinic Logo" class="logo">
@@ -407,77 +433,92 @@ try {
             <a href="my_appointment.php" class="btn-primary-custom">View My Appointments</a>
         </div>
         
-        <div class="appointment-section">
-            <h2 class="section-title">Appointment Request Form</h2>
-            
-            <div class="form-container">
-                <?php if ($error): ?>
-                    <div class="alert alert-danger" role="alert">
-                        <?php echo htmlspecialchars($error); ?>
-                    </div>
-                <?php endif; ?>
-        
-                <p>Please select your preferred date and time for an appointment. Our staff will review your request and confirm your appointment.</p>
-        
-                <form id="appointmentForm" action="book_appointment.php" method="post">
-                    <div class="mb-3">
-                        <label for="date" class="form-label">Preferred Date:</label>
-                        <input type="date" id="date" name="date" class="form-control" required>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="time" class="form-label">Preferred Time Slot:</label>
-                        <select id="time" name="time" class="form-select" required>
-                            <option value="">Select a time slot</option>
-                            <option value="9:00 AM - 10:00 AM">9:00 AM - 10:00 AM</option>
-                            <option value="10:00 AM - 11:00 AM">10:00 AM - 11:00 AM</option>
-                            <option value="11:00 AM - 12:00 PM">11:00 AM - 12:00 PM</option>
-                            <option value="1:00 PM - 2:00 PM">1:00 PM - 2:00 PM</option>
-                            <option value="2:00 PM - 3:00 PM">2:00 PM - 3:00 PM</option>
-                            <option value="3:00 PM - 4:00 PM">3:00 PM - 4:00 PM</option>
-                        </select>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="reason" class="form-label">Reason for Appointment:</label>
-                        <textarea id="reason" name="reason" class="form-control" rows="4" required></textarea>
-                    </div>
-                    
-                    <div class="button-group">
-                        <button type="submit" class="btn btn-primary" id="submitBtn">Request Appointment</button>
-                        <button type="reset" class="btn btn-secondary">Clear Form</button>
-                        <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#helpModal">
-                            Need Help?
-                        </button>
-                    </div>
-                </form>
-        
-                <div class="d-none text-center my-3" id="loadingIndicator">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading.</span>
-                    </div>
-                    <p class="mt-2">Submitting your request.</p>
-                </div>
+       <div class="appointment-section">
+    <h2 class="section-title">Appointment Request Form</h2>
+
+    <!-- 左邊：表單欄位 -->
+    <div class="form-container">
+        <p>
+            Please select your preferred date and time for an appointment. 
+            Our staff will review your request and confirm your appointment.
+        </p>
+
+        <form id="appointmentForm" action="book_appointment.php" method="post">
+            <div class="mb-3">
+                <label for="date" class="form-label">Preferred Date:</label>
+                <input type="date" id="date" name="date" class="form-control" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="time" class="form-label">Preferred Time Slot:</label>
+                <select id="time" name="time" class="form-select" required>
+                    <option value="">Select a time slot</option>
+                    <option value="9:00 AM - 10:00 AM">9:00 AM - 10:00 AM</option>
+                    <option value="10:00 AM - 11:00 AM">10:00 AM - 11:00 AM</option>
+                    <option value="11:00 AM - 12:00 PM">11:00 AM - 12:00 PM</option>
+                    <option value="1:00 PM - 2:00 PM">1:00 PM - 2:00 PM</option>
+                    <option value="2:00 PM - 3:00 PM">2:00 PM - 3:00 PM</option>
+                    <option value="3:00 PM - 4:00 PM">3:00 PM - 4:00 PM</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                    <label class="form-label">Preferred Doctor (Optional):</label>
+                    <select name="preferred_doctor" class="form-select">
+                        <option value="">No preference</option>
+
+                        <?php foreach ($doctors as $doc): ?>
+                            <option value="<?= htmlspecialchars($doc['full_name']) ?>">
+                                <?= htmlspecialchars($doc['full_name']) ?>
+                            </option>
+                        <?php endforeach; ?>
+
+                    </select>
             </div>
             
-            <div class="instructions">
-                <h2>Quick Contact</h2>
-                <div class="quick-contact">
-                    <div class="contact-method">
-                        <strong>Emergency:</strong> (+60)19-456 7567
-                    </div>
-                    <div class="contact-method">
-                        <strong>Email:</strong> nexuscare@gmail.com
-                    </div>
-                    <div class="contact-method">
-                        <strong>Business Hours:</strong> Mon-Fri 8:00 AM - 6:00 PM
-                    </div>
-                    <div class="contact-method">
-                        <strong>Address:</strong> 302E-1, Jalan Dato Ismail Hashim, Sungai Ara, 11900 Bayan Lepas, Pulau Pinang
-                    </div>
-                </div>
+
+            <div class="mb-3">
+                <label for="reason" class="form-label">Reason for Appointment:</label>
+                <textarea id="reason" name="reason" class="form-control" rows="4" required></textarea>
+            </div>
+
+            <div class="button-group">
+                <button type="submit" class="btn btn-primary" id="submitBtn">Request Appointment</button>
+                <button type="reset" class="btn btn-secondary">Clear Form</button>
+                <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#helpModal">
+                    Need Help?
+                </button>
+            </div>
+        </form>
+
+        <div class="d-none text-center my-3" id="loadingIndicator">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading.</span>
+            </div>
+            <p class="mt-2">Submitting your request.</p>
+        </div>
+    </div>
+
+    <!-- 右邊：Quick Contact -->
+    <div class="instructions">
+        <h2>Quick Contact</h2>
+        <div class="quick-contact">
+            <div class="contact-method">
+                <strong>Emergency:</strong> (+60)19-456 7567
+            </div>
+            <div class="contact-method">
+                <strong>Email:</strong> nexuscare@gmail.com
+            </div>
+            <div class="contact-method">
+                <strong>Business Hours:</strong> Mon-Fri 8:00 AM - 6:00 PM
+            </div>
+            <div class="contact-method">
+                <strong>Address:</strong> 302E-1, Jalan Dato Ismail Hashim, Sungai Ara, 11900 Bayan Lepas, Pulau Pinang
             </div>
         </div>
+    </div>
+</div>
+
     </main>
 
     <footer>
@@ -486,7 +527,7 @@ try {
         </div>
     </footer>
 
-   
+    <!-- Help Modal -->
     <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -515,7 +556,7 @@ try {
         </div>
     </div>
 
-    
+    <!-- ✅ Success Modal -->
     <div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-success">
@@ -531,39 +572,53 @@ try {
         </div>
     </div>
 
+    <!-- ✅ Error Modal（跟 success 一樣 style，用來顯示 $error） -->
+    <div class="modal fade" id="errorModal" tabindex="-1" aria-labelledby="errorModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-danger">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="errorModalLabel">Appointment Error</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <?php if (!empty($error)): ?>
+                        <?php echo htmlspecialchars($error); ?>
+                    <?php else: ?>
+                        There was a problem submitting your appointment. Please try again.
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-    
     document.addEventListener('DOMContentLoaded', function () {
         const form = document.getElementById('appointmentForm');
         const loader = document.getElementById('loadingIndicator');
         const submitBtn = document.getElementById('submitBtn');
 
-        
         if (form) {
             form.addEventListener('submit', function (e) {
-               
                 e.preventDefault();
 
-                
                 if (loader) {
                     loader.classList.remove('d-none');
                 }
 
-               
                 if (submitBtn) {
                     submitBtn.disabled = true;
                     submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Submitting...';
                 }
 
-          
                 setTimeout(function () {
                     form.submit();
                 }, 1350); 
             });
         }
 
+       
         <?php if ($success): ?>
         const successModalEl = document.getElementById('successModal');
         if (successModalEl) {
@@ -575,8 +630,17 @@ try {
             }, 1500); 
         }
         <?php endif; ?>
+
+        
+        <?php if (!empty($error)): ?>
+        const errorModalEl = document.getElementById('errorModal');
+        if (errorModalEl) {
+            const errorModal = new bootstrap.Modal(errorModalEl);
+            errorModal.show();
+        }
+        <?php endif; ?>
     });
-</script>
+    </script>
 
 </body>
 </html>

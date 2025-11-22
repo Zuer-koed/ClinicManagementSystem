@@ -1,33 +1,39 @@
 <?php
 session_start();
-
-
 require_once 'db_connection.php';
 
 
-$_SESSION['user_id'] = 2;
-$_SESSION['role'] = 'patient';
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
+    header("Location: login.php?error=please_login");
+    exit();
+}
 
 
+if ($_SESSION['role'] !== 'patient') {
+    header("Location: login.php?error=unauthorized");
+    exit();
+}
 
 try {
+  
     $stmt = $pdo->prepare("
         SELECT p.full_name, p.patient_id
-        FROM patient p 
+        FROM patient p
         WHERE p.user_id = ?
     ");
     $stmt->execute([$_SESSION['user_id']]);
-    $patient = $stmt->fetch(PDO::FETCH_ASSOC);
+    $patient = $stmt->fetch();
 
+   
     if (!$patient) {
-        
-        die('Patient profile not found for test user (user_id=2).');
+        header("Location: login.php?error=no_patient_profile");
+        exit();
     }
 
     $patient_name = $patient['full_name'];
     $patient_id   = $patient['patient_id'];
 
-    // Get next appointment
+
     $nextStmt = $pdo->prepare("
         SELECT a.preferred_date, a.preferred_time, d.full_name AS doctor_name, a.status
         FROM appointment a
@@ -39,33 +45,40 @@ try {
         LIMIT 1
     ");
     $nextStmt->execute([$patient_id]);
-    $nextAppointment = $nextStmt->fetch(PDO::FETCH_ASSOC);
+    $nextAppointment = $nextStmt->fetch();
 
-    // Statistics
+
+    
     $statsStmt = $pdo->prepare("
         SELECT
             COUNT(*) AS total,
-            SUM(a.status = 'pending')   AS pending,
+            SUM(a.status = 'pending') AS pending,
             SUM(a.status = 'completed') AS completed,
             SUM(a.status = 'confirmed') AS upcoming
         FROM appointment a
         WHERE a.patient_id = ?
     ");
     $statsStmt->execute([$patient_id]);
-    $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
+    $stats = $statsStmt->fetch();
+
+    if (!$stats) {
+        $stats = [
+            'total'     => 0,
+            'pending'   => 0,
+            'completed' => 0,
+            'upcoming'  => 0,
+        ];
+    }
 
 } catch (PDOException $e) {
-    error_log("Database error: " . $e->getMessage());
-    $patient_name   = "Patient";
-    $nextAppointment = null;
-    $stats = [
-        'total'     => 0,
-        'pending'   => 0,
-        'completed' => 0,
-        'upcoming'  => 0,
-    ];
+
+   
+    header("Location: login.php?error=db_error");
+    exit();
 }
 ?>
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -452,7 +465,7 @@ try {
             <?php endif; ?>
         </div>
         
-        <!-- Stats + Quick Actions -->
+        
         <div class="dashboard-section">
             <h2>Quick Stats</h2>
             <div class="stats-grid">

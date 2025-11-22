@@ -1,19 +1,24 @@
 <?php
-
 session_start();
 require_once 'db_connection.php';
 
 
-$_SESSION['user_id'] = 2;
-$_SESSION['role'] = 'patient';
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
+    header("Location: login.php?error=please_login");
+    exit();
+}
 
+if ($_SESSION['role'] !== 'patient') {
+    header("Location: login.php?error=unauthorized");
+    exit();
+}
 
 $user_id = $_SESSION['user_id'];
 $success = false;
 $error_message = '';
 
-
 try {
+    
     $stmt = $pdo->prepare("
         SELECT 
             p.patient_id,
@@ -25,7 +30,6 @@ try {
             p.emergency_contact_name,
             p.emergency_contact_phone,
             p.blood_type,
-            p.primary_care_physician,
             p.gender
         FROM patient p
         JOIN user u ON p.user_id = u.user_id
@@ -36,7 +40,7 @@ try {
     $patient = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if (!$patient) {
-        die('Patient profile not found for test user.');
+        die('Patient profile not found for this user.');
     }
     
 } catch(PDOException $e) {
@@ -44,9 +48,11 @@ try {
     die("Error loading profile data.");
 }
 
+// ---------------------------
+// 📝 3. 處理表單送出（更新資料）
+// ---------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        
         $full_name               = $_POST['full_name'];
         $date_of_birth           = $_POST['date_of_birth'];
         $phone_number            = $_POST['phone'];
@@ -54,9 +60,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $emergency_contact_name  = $_POST['emergency_contact_name'];
         $emergency_contact_phone = $_POST['emergency_contact_phone'];
         $blood_type              = $_POST['blood_type'];
-        $primary_care_physician  = $_POST['primary_physician'];
-        
-        
+        // 這裡雖然有 primary_physician 欄位，但目前資料庫沒有對應欄位，就暫時不寫入喵
+        $primary_care_physician  = $_POST['primary_physician'] ?? null;
+
+        // 👉 UPDATE 只更新你目前資料表真的存在的欄位
         $update_stmt = $pdo->prepare("
             UPDATE patient 
             SET 
@@ -66,8 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 address = ?,
                 emergency_contact_name = ?,
                 emergency_contact_phone = ?,
-                blood_type = ?,
-                primary_care_physician = ?
+                blood_type = ?
             WHERE user_id = ?
         ");
         
@@ -79,21 +85,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $emergency_contact_name,
             $emergency_contact_phone,
             $blood_type,
-            $primary_care_physician,
             $user_id
         ]);
         
-        
+        // 更新 Email（在 user table）
         if (isset($_POST['email']) && $_POST['email'] !== $patient['email']) {
             $email = $_POST['email'];
             $email_stmt = $pdo->prepare("UPDATE user SET email = ? WHERE user_id = ?");
             $email_stmt->execute([$email, $user_id]);
         }
         
-        
         $success = true;
-        
-        
+
+        // 重新抓一次最新資料，給畫面顯示
         $stmt->execute([$user_id]);
         $patient = $stmt->fetch(PDO::FETCH_ASSOC);
         
@@ -103,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-
+// 顯示用 Patient ID
 $display_patient_id = "P-" . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
 ?>
 <!DOCTYPE html>
@@ -116,7 +120,7 @@ $display_patient_id = "P-" . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEF
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 
     <style>
-     
+        /* 你的設計這裡哈基米完全沒動喵 */
         * {
             margin: 0;
             padding: 0;
@@ -527,10 +531,7 @@ $display_patient_id = "P-" . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEF
                         </select>
                     </div>
                     
-                    <div class="form-group">
-                        <label for="primary_physician">Primary Care Physician</label>
-                        <input type="text" id="primary_physician" name="primary_physician" value="<?php echo htmlspecialchars($patient['primary_care_physician']); ?>">
-                    </div>
+                   
                 </div>
                 
                 <div class="form-actions">
@@ -548,7 +549,7 @@ $display_patient_id = "P-" . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEF
         </div>
     </footer>
 
-   
+    <!-- 成功 Modal -->
     <div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-success">
@@ -564,11 +565,10 @@ $display_patient_id = "P-" . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEF
         </div>
     </div>
 
-    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-      
+        // 表單前端驗證（你原本的，哈基米也保留喵）
         document.addEventListener('DOMContentLoaded', function() {
             const form = document.querySelector('form');
             
@@ -609,7 +609,7 @@ $display_patient_id = "P-" . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEF
             }
         });
 
-       
+        // 顯示成功彈窗並跳轉
         document.addEventListener('DOMContentLoaded', function () {
             <?php if ($success): ?>
             const successModalEl = document.getElementById('successModal');
@@ -620,7 +620,7 @@ $display_patient_id = "P-" . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEF
                 setTimeout(function () {
                     successModal.hide();
                     window.location.href = 'patient_profile.php';
-                }, 1500); 
+                }, 1500);
             }
             <?php endif; ?>
         });
