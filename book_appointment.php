@@ -5,26 +5,21 @@ require_once 'db_connection.php';
 $success = false;
 $error   = "";
 
-// -----------------------------------------
-// 🔐 1. 檢查是否有登入
-// -----------------------------------------
+
 if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
     header("Location: login.php?error=please_login");
     exit();
 }
 
-// -----------------------------------------
-// 🔐 2. 限制只有 patient 角色可以進來
-// -----------------------------------------
+
+
 if ($_SESSION['role'] !== 'patient') {
     header("Location: login.php?error=unauthorized");
     exit();
 }
 
 try {
-    // -----------------------------------------
-    // 🔍 找 patient 资料
-    // -----------------------------------------
+
     $stmt = $pdo->prepare("
         SELECT p.full_name, p.patient_id 
         FROM patient p 
@@ -41,23 +36,19 @@ try {
     $patient_name = $patient['full_name'];
     $patient_id   = $patient['patient_id'];
 
-    // -----------------------------------------
-    // 🔍 取得所有医生名单（用于 Preferred Doctor）
-    // -----------------------------------------
+   
     $doctorStmt = $pdo->prepare("SELECT doctor_id, full_name FROM doctor ORDER BY full_name ASC");
     $doctorStmt->execute();
     $doctors = $doctorStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // -----------------------------------------
-    // 📝 4. 处理表单提交
-    // -----------------------------------------
+  
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $date   = $_POST['date']   ?? null;
         $time   = $_POST['time']   ?? null;
         $reason = $_POST['reason'] ?? null;
         $preferred_doctor = $_POST['preferred_doctor'] ?? "";
 
-        // notes 存 Preferred Doctor（不影响 staff 后台）
+        
         $notes = $preferred_doctor ? ("Preferred doctor: " . $preferred_doctor) : null;
 
         if ($date && $time && $reason) {
@@ -499,7 +490,7 @@ try {
         </div>
     </div>
 
-    <!-- 右邊：Quick Contact -->
+  
     <div class="instructions">
         <h2>Quick Contact</h2>
         <div class="quick-contact">
