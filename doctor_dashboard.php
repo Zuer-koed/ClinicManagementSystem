@@ -1,3 +1,62 @@
+<?php
+session_start();
+require_once 'db_connection.php';
+
+// Check if user is logged in and is a doctor
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'doctor') {
+    header('Location: login.php');
+    exit();
+}
+
+// Check if doctor_id is set in session, if not redirect to login
+if (!isset($_SESSION['doctor_id'])) {
+    // Try to get doctor_id from database
+    $user_id = $_SESSION['user_id'];
+    $stmt = $pdo->prepare("SELECT doctor_id FROM doctor WHERE user_id = ?");
+    $stmt->execute([$user_id]);
+    $doctor = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if ($doctor && isset($doctor['doctor_id'])) {
+        $_SESSION['doctor_id'] = $doctor['doctor_id'];
+    } else {
+        // If still no doctor_id, redirect to login
+        header('Location: login.php');
+        exit();
+    }
+}
+
+$doctor_id = $_SESSION['doctor_id'];
+
+// Get doctor information
+$stmt = $pdo->prepare("
+    SELECT d.*, u.email 
+    FROM doctor d 
+    JOIN user u ON d.user_id = u.user_id 
+    WHERE d.doctor_id = ?
+");
+$stmt->execute([$doctor_id]);
+$doctor = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Check if doctor exists
+if (!$doctor) {
+    session_destroy();
+    header('Location: login.php');
+    exit();
+}
+
+// Get today's appointments
+$today = date('Y-m-d');
+$stmt = $pdo->prepare("
+    SELECT a.*, p.full_name, p.date_of_birth, p.gender
+    FROM appointment a
+    JOIN patient p ON a.patient_id = p.patient_id
+    WHERE a.doctor_id = ? AND a.preferred_date = ? AND a.status = 'confirmed'
+    ORDER BY a.preferred_time ASC
+");
+$stmt->execute([$doctor_id, $today]);
+$appointments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,6 +64,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NexusCare - Doctor Portal</title>
     <style>
+        /* Your existing CSS styles remain the same */
         * {
             margin: 0;
             padding: 0;
@@ -350,7 +410,12 @@
             <div class="welcome-section">
                 <div class="welcome-message">
                     <h1>Doctor Portal</h1>
-                    <p>Welcome, Dr. [Name]!</p>
+                    <p>Welcome, Dr. <?php 
+                        // Remove "Dr." prefix if it exists in the name
+                        $doctorName = $doctor['full_name'] ?? 'Doctor';
+                        $cleanedName = preg_replace('/^Dr\.\s*/i', '', $doctorName);
+                        echo htmlspecialchars($cleanedName); 
+                    ?>!</p>
                 </div>
                 <a href="logout.php" class="logout-link">Logout</a>
             </div>
@@ -385,45 +450,31 @@
             <div class="appointments-list">
                 <h2>Today's Confirmed Appointments</h2>
                 
-                <!-- Appointment 1 - Morning -->
-                <div class="appointment-card">
-                    <h3>Sarah Johnson</h3>
-                    <p><strong>Appointment ID:</strong> #A-001</p>
-                    <p><strong>Time:</strong> 9:00 AM - 10:00 AM</p>
-                    <p><strong>Reason for Visit:</strong> Routine check-up</p>
-                    <span class="status confirmed">Confirmed</span>
-                    <a href="patient_details.php?patient_id=1" class="btn-view-details">View Patient Details & Medical History</a>
-                </div>
-                
-                <!-- Appointment 2 - Late Morning -->
-                <div class="appointment-card">
-                    <h3>Michael Chen</h3>
-                    <p><strong>Appointment ID:</strong> #A-002</p>
-                    <p><strong>Time:</strong> 10:30 AM - 11:30 AM</p>
-                    <p><strong>Reason for Visit:</strong> Follow-up consultation</p>
-                    <span class="status confirmed">Confirmed</span>
-                    <a href="patient_details.php?patient_id=2" class="btn-view-details">View Patient Details & Medical History</a>
-                </div>
-                
-                <!-- Appointment 3 - Afternoon -->
-                <div class="appointment-card">
-                    <h3>Emma Williams</h3>
-                    <p><strong>Appointment ID:</strong> #A-003</p>
-                    <p><strong>Time:</strong> 2:00 PM - 3:00 PM</p>
-                    <p><strong>Reason for Visit:</strong> New symptoms evaluation</p>
-                    <span class="status confirmed">Confirmed</span>
-                    <a href="patient_details.php?patient_id=3" class="btn-view-details">View Patient Details & Medical History</a>
-                </div>
-                
-                <!-- Appointment 4 - Late Afternoon -->
-                <div class="appointment-card">
-                    <h3>Robert Garcia</h3>
-                    <p><strong>Appointment ID:</strong> #A-004</p>
-                    <p><strong>Time:</strong> 3:30 PM - 4:30 PM</p>
-                    <p><strong>Reason for Visit:</strong> Annual physical</p>
-                    <span class="status confirmed">Confirmed</span>
-                    <a href="patient_details.php?patient_id=4" class="btn-view-details">View Patient Details & Medical History</a>
-                </div>
+                <?php if (count($appointments) > 0): ?>
+                    <?php foreach ($appointments as $appointment): ?>
+                        <div class="appointment-card">
+                            <h3><?php echo htmlspecialchars($appointment['full_name']); ?></h3>
+                            <p><strong>Appointment ID:</strong> #A-<?php echo str_pad($appointment['appointment_id'], 3, '0', STR_PAD_LEFT); ?></p>
+                            <p><strong>Time:</strong> <?php echo date('g:i A', strtotime($appointment['preferred_time'])); ?></p>
+                            <p><strong>Reason for Visit:</strong> <?php echo htmlspecialchars($appointment['reason']); ?></p>
+                            <?php if ($appointment['date_of_birth']): ?>
+                                <p><strong>Patient Age:</strong> <?php 
+                                    $dob = new DateTime($appointment['date_of_birth']);
+                                    $today = new DateTime();
+                                    $age = $today->diff($dob)->y;
+                                    echo $age . ' years';
+                                ?></p>
+                            <?php endif; ?>
+                            <span class="status confirmed">Confirmed</span>
+                            <a href="patient_details.php?patient_id=<?php echo $appointment['patient_id']; ?>" class="btn-view-details">View Patient Details & Medical History</a>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="appointment-card">
+                        <h3>No Appointments Today</h3>
+                        <p>You have no confirmed appointments scheduled for today.</p>
+                    </div>
+                <?php endif; ?>
             </div>
             
             <div class="doctor-actions">
@@ -440,13 +491,19 @@
                     <p>Access complete patient records and medical histories.</p>
                     <a href="patient_list.php" class="btn-action">View Patients</a>
                 </div>
+                
+                <div class="action-card">
+                    <h3>My Profile</h3>
+                    <p>Update your personal information and professional details.</p>
+                    <a href="doctor_profile.php" class="btn-action">Edit Profile</a>
+                </div>
             </div>
         </div>
     </main>
 
     <footer>
         <div class="footer-container">
-            <p>&copy; 2024 Nexus Care. All rights reserved.</p>
+            <p>&copy; 2025 Nexus Care. All rights reserved.</p>
         </div>
     </footer>
 
