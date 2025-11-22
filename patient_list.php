@@ -1,3 +1,87 @@
+<?php
+session_start();
+require_once 'db_connection.php';
+
+// Check if user is logged in and is a doctor
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'doctor') {
+    header('Location: login.php');
+    exit();
+}
+
+$doctor_id = $_SESSION['doctor_id'];
+
+// Get doctor information
+$stmt = $pdo->prepare("SELECT * FROM doctor WHERE doctor_id = ?");
+$stmt->execute([$doctor_id]);
+$doctor = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Handle search
+$search = $_GET['search'] ?? '';
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$limit = 5;
+$offset = ($page - 1) * $limit;
+
+// Build base query for patients
+$query = "
+    SELECT p.*, u.email, MAX(a.preferred_date) as last_visit
+    FROM patient p 
+    JOIN user u ON p.user_id = u.user_id 
+    LEFT JOIN appointment a ON p.patient_id = a.patient_id AND a.doctor_id = ?
+    WHERE 1=1
+";
+
+$params = [$doctor_id];
+$countParams = [$doctor_id];
+
+if (!empty($search)) {
+    $query .= " AND (p.full_name LIKE ? OR p.patient_id = ? OR u.email LIKE ?)";
+    $searchTerm = "%$search%";
+    $params[] = $searchTerm;
+    
+    // Handle patient ID search (remove 'P-' prefix if present)
+    $patientIdSearch = str_replace('P-', '', $search);
+    $params[] = $patientIdSearch;
+    
+    $params[] = $searchTerm;
+    $countParams[] = $searchTerm;
+    $countParams[] = $patientIdSearch;
+    $countParams[] = $searchTerm;
+}
+
+$query .= " GROUP BY p.patient_id ORDER BY p.full_name";
+
+// Add LIMIT and OFFSET directly to the query (not as parameters)
+$query .= " LIMIT $limit OFFSET $offset";
+
+// Get patients
+$stmt = $pdo->prepare($query);
+$stmt->execute($params);
+$patients = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Get total count for pagination
+$countQuery = "
+    SELECT COUNT(DISTINCT p.patient_id) as total
+    FROM patient p 
+    JOIN user u ON p.user_id = u.user_id 
+    LEFT JOIN appointment a ON p.patient_id = a.patient_id AND a.doctor_id = ?
+    WHERE 1=1
+";
+
+if (!empty($search)) {
+    $countQuery .= " AND (p.full_name LIKE ? OR p.patient_id = ? OR u.email LIKE ?)";
+}
+
+$stmt = $pdo->prepare($countQuery);
+$stmt->execute($countParams);
+$totalResult = $stmt->fetch(PDO::FETCH_ASSOC);
+$totalPatients = $totalResult ? $totalResult['total'] : 0;
+$totalPages = $totalPatients > 0 ? ceil($totalPatients / $limit) : 1;
+
+// Ensure page is within valid range
+if ($page < 1) $page = 1;
+if ($page > $totalPages) $page = $totalPages;
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -191,6 +275,12 @@
         .btn-secondary {
             background-color: #f0f0f0;
             color: #333;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+            line-height: normal;
+            padding: 10px 20px;
+            border-radius: 4px;
         }
         
         .btn-secondary:hover {
@@ -269,6 +359,8 @@
             color: #333;
             border-radius: 4px;
             cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
             transition: all 0.3s;
         }
         
@@ -353,7 +445,11 @@
             <div class="welcome-section">
                 <div class="welcome-message">
                     <h1>Doctor Portal</h1>
-                    <p>Welcome, Dr. [Name]!</p>
+                    <p>Welcome, Dr. <?php 
+                        $doctorName = $doctor['full_name'] ?? 'Doctor';
+                        $cleanedName = preg_replace('/^Dr\.\s*/i', '', $doctorName);
+                        echo htmlspecialchars($cleanedName); 
+                    ?>!</p>
                 </div>
                 <a href="logout.php" class="logout-link">Logout</a>
             </div>
@@ -381,10 +477,10 @@
             <form action="" method="get" class="search-form">
                 <div class="form-group">
                     <label for="search">Search Patients</label>
-                    <input type="text" id="search" name="search" placeholder="Enter patient name or ID">
+                    <input type="text" id="search" name="search" placeholder="Enter patient name or ID" value="<?php echo htmlspecialchars($search); ?>">
                 </div>
                 <button type="submit" class="btn-primary">Search</button>
-                <button type="reset" class="btn-secondary">Clear</button>
+                <a href="patient_list.php" class="btn-secondary">Clear</a>
             </form>
         </div>
 
@@ -402,75 +498,68 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td>P-001</td>
-                        <td>Sarah Johnson</td>
-                        <td>1985-03-15</td>
-                        <td>2025-09-10</td>
-                        <td>sarah.j@email.com<br>555-0101</td>
-                        <td><a href="patient_details.php?patient_id=1" class="btn-view">View Details</a></td>
-                    </tr>
-                    <tr>
-                        <td>P-002</td>
-                        <td>Michael Chen</td>
-                        <td>1978-11-22</td>
-                        <td>2025-09-08</td>
-                        <td>michael.c@email.com<br>555-0102</td>
-                        <td><a href="patient_details.php?patient_id=2" class="btn-view">View Details</a></td>
-                    </tr>
-                    <tr>
-                        <td>P-003</td>
-                        <td>Emma Williams</td>
-                        <td>1992-07-30</td>
-                        <td>2025-09-05</td>
-                        <td>emma.w@email.com<br>555-0103</td>
-                        <td><a href="patient_details.php?patient_id=3" class="btn-view">View Details</a></td>
-                    </tr>
-                    <tr>
-                        <td>P-004</td>
-                        <td>Robert Garcia</td>
-                        <td>1980-12-10</td>
-                        <td>2025-08-28</td>
-                        <td>robert.g@email.com<br>555-0104</td>
-                        <td><a href="patient_details.php?patient_id=4" class="btn-view">View Details</a></td>
-                    </tr>
-                    <tr>
-                        <td>P-005</td>
-                        <td>Lisa Thompson</td>
-                        <td>1975-05-18</td>
-                        <td>2025-08-25</td>
-                        <td>lisa.t@email.com<br>555-0105</td>
-                        <td><a href="patient_details.php?patient_id=5" class="btn-view">View Details</a></td>
-                    </tr>
+                    <?php if (count($patients) > 0): ?>
+                        <?php foreach ($patients as $patient): ?>
+                            <tr>
+                                <td>P-<?php echo str_pad($patient['patient_id'], 3, '0', STR_PAD_LEFT); ?></td>
+                                <td><?php echo htmlspecialchars($patient['full_name']); ?></td>
+                                <td><?php echo $patient['date_of_birth']; ?></td>
+                                <td><?php echo $patient['last_visit'] ?? 'No visits yet'; ?></td>
+                                <td>
+                                    <?php echo htmlspecialchars($patient['email']); ?>
+                                    <?php if (!empty($patient['phone_number'])): ?>
+                                        <br><?php echo htmlspecialchars($patient['phone_number']); ?>
+                                    <?php endif; ?>
+                                </td>
+                                <td><a href="patient_details.php?patient_id=<?php echo $patient['patient_id']; ?>" class="btn-view">View Details</a></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 20px;">
+                                <?php echo empty($search) ? 'No patients found.' : 'No patients found matching your search.'; ?>
+                            </td>
+                        </tr>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
 
         <!-- Pagination -->
+        <?php if ($totalPages > 1): ?>
         <div class="pagination">
             <div class="pagination-info">
-                <p>Showing 1-5 of 12 patients</p>
+                <p>
+                    <?php 
+                    $start = (($page - 1) * $limit) + 1;
+                    $end = min($page * $limit, $totalPatients);
+                    echo "Showing $start-$end of $totalPatients patients"; 
+                    ?>
+                </p>
             </div>
             <div class="pagination-controls">
-                <button class="pagination-btn">Previous</button>
-                <button class="pagination-btn active">1</button>
-                <button class="pagination-btn">2</button>
-                <button class="pagination-btn">3</button>
-                <button class="pagination-btn">Next</button>
+                <?php if ($page > 1): ?>
+                    <a href="?page=<?php echo $page - 1; ?>&search=<?php echo urlencode($search); ?>" class="pagination-btn">Previous</a>
+                <?php endif; ?>
+                
+                <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                    <a href="?page=<?php echo $i; ?>&search=<?php echo urlencode($search); ?>" class="pagination-btn <?php echo $i == $page ? 'active' : ''; ?>">
+                        <?php echo $i; ?>
+                    </a>
+                <?php endfor; ?>
+                
+                <?php if ($page < $totalPages): ?>
+                    <a href="?page=<?php echo $page + 1; ?>&search=<?php echo urlencode($search); ?>" class="pagination-btn">Next</a>
+                <?php endif; ?>
             </div>
         </div>
+        <?php endif; ?>
     </main>
 
     <footer>
-<<<<<<< HEAD
         <div class="footer-container">
             <p>&copy; 2025 NexusCare. All rights reserved.</p>
         </div>
     </footer>
-=======
-        <p>&copy; 2025 NexusCare. All rights reserved.</p>
-    </footer>
-
->>>>>>> f60d6414eca54246b00d92abab43a29d245b32b8
 </body>
 </html>
