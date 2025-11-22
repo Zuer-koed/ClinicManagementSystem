@@ -1,3 +1,152 @@
+<?php
+session_start();
+require_once 'db_connection.php';
+
+// Check if user is logged in and is a staff member
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'staff') {
+    header('Location: login.php');
+    exit();
+}
+
+$staff_id = $_SESSION['user_id'];
+
+// Get staff information
+$stmt = $pdo->prepare("SELECT * FROM staff WHERE staff_id = ?");
+$stmt->execute([$staff_id]);
+$staff = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Handle form submissions
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if (isset($_POST['action'])) {
+        $action = $_POST['action'];
+        
+        if ($action === 'confirm' && isset($_POST['request_id'])) {
+            // Confirm appointment request
+            $appointment_id = $_POST['request_id'];
+            $doctor_id = $_POST['doctor_id'];
+            $appointment_time = $_POST['appointment_time'];
+            
+            $stmt = $pdo->prepare("UPDATE appointment SET doctor_id = ?, preferred_time = ?, status = 'confirmed' WHERE appointment_id = ?");
+            $stmt->execute([$doctor_id, $appointment_time, $appointment_id]);
+            $success = "Appointment confirmed successfully!";
+            
+        } elseif ($action === 'reject' && isset($_POST['request_id'])) {
+            // Reject appointment request
+            $appointment_id = $_POST['request_id'];
+            $stmt = $pdo->prepare("UPDATE appointment SET status = 'cancelled' WHERE appointment_id = ?");
+            $stmt->execute([$appointment_id]);
+            $success = "Appointment request rejected!";
+            
+        } elseif ($action === 'walkin') {
+            // Register walk-in patient
+            $patient_type = $_POST['patient_type'];
+            $doctor_id = $_POST['walkin_doctor'];
+            $reason = $_POST['walkin_reason'];
+            
+            if ($patient_type === 'existing') {
+                $search_term = $_POST['search_patient'];
+                // Search for existing patient
+                $stmt = $pdo->prepare("SELECT patient_id FROM patient WHERE full_name LIKE ? OR patient_id = ? LIMIT 1");
+                $stmt->execute(["%$search_term%", $search_term]);
+                $patient = $stmt->fetch(PDO::FETCH_ASSOC);
+                $patient_id = $patient ? $patient['patient_id'] : null;
+            } else {
+                // Create new patient record
+                $walkin_name = $_POST['walkin_name'];
+                $walkin_phone = $_POST['walkin_phone'];
+                
+                // First create user account
+                $stmt = $pdo->prepare("INSERT INTO user (email, password_hash, role) VALUES (?, ?, 'patient')");
+                $temp_email = uniqid() . '@walkin.com';
+                $temp_password = password_hash('temp123', PASSWORD_DEFAULT);
+                $stmt->execute([$temp_email, $temp_password]);
+                $user_id = $pdo->lastInsertId();
+                
+                // Then create patient record
+                $stmt = $pdo->prepare("INSERT INTO patient (user_id, full_name, phone_number) VALUES (?, ?, ?)");
+                $stmt->execute([$user_id, $walkin_name, $walkin_phone]);
+                $patient_id = $pdo->lastInsertId();
+            }
+            
+            if ($patient_id) {
+                $stmt = $pdo->prepare("INSERT INTO appointment (patient_id, doctor_id, preferred_date, preferred_time, reason, status) VALUES (?, ?, CURDATE(), NOW(), ?, 'walk_in')");
+                $stmt->execute([$patient_id, $doctor_id, $reason]);
+                $success = "Walk-in patient registered successfully!";
+            }
+            
+        } elseif ($action === 'emergency') {
+            // Register emergency case
+            $emergency_name = $_POST['emergency_name'];
+            $doctor_id = $_POST['emergency_doctor'];
+            $emergency_reason = $_POST['emergency_reason'];
+            $priority = $_POST['emergency_priority'];
+            
+            // Create temporary patient record for emergency
+            $stmt = $pdo->prepare("INSERT INTO user (email, password_hash, role) VALUES (?, ?, 'patient')");
+            $temp_email = uniqid() . '@emergency.com';
+            $temp_password = password_hash('temp123', PASSWORD_DEFAULT);
+            $stmt->execute([$temp_email, $temp_password]);
+            $user_id = $pdo->lastInsertId();
+            
+            $stmt = $pdo->prepare("INSERT INTO patient (user_id, full_name) VALUES (?, ?)");
+            $stmt->execute([$user_id, $emergency_name]);
+            $patient_id = $pdo->lastInsertId();
+            
+            $stmt = $pdo->prepare("INSERT INTO appointment (patient_id, doctor_id, preferred_date, preferred_time, reason, status) VALUES (?, ?, CURDATE(), NOW(), ?, 'emergency')");
+            $stmt->execute([$patient_id, $doctor_id, $emergency_reason]);
+            $success = "Emergency case registered successfully!";
+        }
+    }
+}
+
+// Get pending appointment requests
+$pendingStmt = $pdo->query("
+    SELECT a.*, p.full_name as patient_name, p.phone_number, u.email 
+    FROM appointment a 
+    JOIN patient p ON a.patient_id = p.patient_id 
+    JOIN user u ON p.user_id = u.user_id 
+    WHERE a.status = 'pending' 
+    ORDER BY a.created_at DESC
+");
+$pendingRequests = $pendingStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Get today's appointments
+$todayStmt = $pdo->query("
+    SELECT a.*, p.full_name as patient_name, d.full_name as doctor_name 
+    FROM appointment a 
+    JOIN patient p ON a.patient_id = p.patient_id 
+    JOIN doctor d ON a.doctor_id = d.doctor_id 
+    WHERE a.preferred_date = CURDATE() AND a.status IN ('confirmed', 'emergency', 'walk_in')
+    ORDER BY a.preferred_time
+");
+$todayAppointments = $todayStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Get doctors for dropdowns
+$doctorsStmt = $pdo->query("SELECT * FROM doctor");
+$doctors = $doctorsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Get queue by doctor
+$queueStmt = $pdo->query("
+    SELECT a.*, p.full_name as patient_name, d.full_name as doctor_name 
+    FROM appointment a 
+    JOIN patient p ON a.patient_id = p.patient_id 
+    JOIN doctor d ON a.doctor_id = d.doctor_id 
+    WHERE a.preferred_date = CURDATE() AND a.status IN ('confirmed', 'emergency', 'walk_in')
+    ORDER BY d.doctor_id, a.status DESC, a.preferred_time
+");
+$queueData = $queueStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Group queue by doctor
+$doctorQueues = [];
+foreach ($queueData as $appointment) {
+    $doctorName = $appointment['doctor_name'];
+    if (!isset($doctorQueues[$doctorName])) {
+        $doctorQueues[$doctorName] = [];
+    }
+    $doctorQueues[$doctorName][] = $appointment;
+}
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,6 +154,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NexusCare - Manage Appointments</title>
     <style>
+        /* ... (keep all the existing CSS styles) ... */
         * {
             margin: 0;
             padding: 0;
@@ -441,7 +591,7 @@
             <div class="welcome-section">
                 <div class="welcome-message">
                     <h1>Staff Portal</h1>
-                    <p>Welcome, Staff Member!</p>
+                    <p>Welcome, <?php echo htmlspecialchars($staff['full_name'] ?? 'Staff Member'); ?>!</p>
                 </div>
                 <a href="logout.php" class="logout-link">Logout</a>
             </div>
@@ -451,7 +601,8 @@
                     <ul>
                         <li><a href="staff_dashboard.php">Dashboard</a></li>
                         <li><a href="staff_manage_appointment.php" class="active">Manage Appointments</a></li>
-                        <li><a href="patient_list.php">Patient List</a></li>
+                        <li><a href="staff_patient_list.php">Patient List</a></li>
+                        <li><a href="staff_profile.php">My Profile</a></li>
                     </ul>
                 </div>
             </nav>
@@ -463,13 +614,19 @@
             <h1>Appointment Management Center</h1>
         </div>
 
+        <?php if (isset($success)): ?>
+            <div class="section-card" style="background-color: #d4edda; color: #155724;">
+                <?php echo $success; ?>
+            </div>
+        <?php endif; ?>
+
         <!-- Quick Action Buttons -->
         <section class="section-card">
             <h2>Quick Actions</h2>
             <div class="quick-actions">
                 <button onclick="showWalkInForm()" class="btn-primary">New Walk-in Patient</button>
                 <button onclick="showEmergencyForm()" class="btn-primary">New Emergency Case</button>
-                <a href="#pending-requests" class="btn-link">View Pending Requests (5)</a>
+                <a href="#pending-requests" class="btn-link">View Pending Requests (<?php echo count($pendingRequests); ?>)</a>
                 <a href="#queue-management" class="btn-link">Manage Queues</a>
             </div>
         </section>
@@ -478,64 +635,40 @@
         <section id="pending-requests" class="section-card">
             <h2>Pending Appointment Requests</h2>
             
-            <!-- Pending Request 1 -->
-            <div class="request-card">
-                <h4>Request #R-001</h4>
-                <p><strong>Patient:</strong> New Patient - John Davis</p>
-                <p><strong>Preferred Date/Time:</strong> 2025-09-16, 2:00-3:00 PM</p>
-                <p><strong>Reason:</strong> General consultation</p>
-                <p><strong>Contact:</strong> john.d@email.com | 555-0110</p>
-                
-                <form action="" method="post">
-                    <input type="hidden" name="request_id" value="1">
-                    <div class="form-group">
-                        <label for="doctor1">Assign Doctor:</label>
-                        <select id="doctor1" name="doctor_id" required>
-                            <option value="">Select Doctor</option>
-                            <option value="1">Dr. Smith</option>
-                            <option value="2">Dr. Johnson</option>
-                            <option value="3">Dr. Williams</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="appointment_time1">Appointment Time:</label>
-                        <input type="datetime-local" id="appointment_time1" name="appointment_time" required>
-                    </div>
-                    <div class="quick-actions">
-                        <button type="submit" name="action" value="confirm" class="btn-primary">Confirm Appointment</button>
-                        <button type="submit" name="action" value="reject" class="btn-danger">Reject Request</button>
-                    </div>
-                </form>
-            </div>
-
-            <!-- Pending Request 2 -->
-            <div class="request-card">
-                <h4>Request #R-002</h4>
-                <p><strong>Patient:</strong> Sarah Johnson (Existing)</p>
-                <p><strong>Preferred Date/Time:</strong> 2025-09-17, 10:00-11:00 AM</p>
-                <p><strong>Reason:</strong> Follow-up check</p>
-                
-                <form action="" method="post">
-                    <input type="hidden" name="request_id" value="2">
-                    <div class="form-group">
-                        <label for="doctor2">Assign Doctor:</label>
-                        <select id="doctor2" name="doctor_id" required>
-                            <option value="">Select Doctor</option>
-                            <option value="1">Dr. Smith</option>
-                            <option value="2">Dr. Johnson</option>
-                            <option value="3">Dr. Williams</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="appointment_time2">Appointment Time:</label>
-                        <input type="datetime-local" id="appointment_time2" name="appointment_time" required>
-                    </div>
-                    <div class="quick-actions">
-                        <button type="submit" name="action" value="confirm" class="btn-primary">Confirm Appointment</button>
-                        <button type="submit" name="action" value="reject" class="btn-danger">Reject Request</button>
-                    </div>
-                </form>
-            </div>
+            <?php if (count($pendingRequests) > 0): ?>
+                <?php foreach ($pendingRequests as $request): ?>
+                <div class="request-card">
+                    <h4>Request #R-<?php echo str_pad($request['appointment_id'], 3, '0', STR_PAD_LEFT); ?></h4>
+                    <p><strong>Patient:</strong> <?php echo htmlspecialchars($request['patient_name']); ?></p>
+                    <p><strong>Preferred Date/Time:</strong> <?php echo $request['preferred_date'] . ', ' . $request['preferred_time']; ?></p>
+                    <p><strong>Reason:</strong> <?php echo htmlspecialchars($request['reason']); ?></p>
+                    <p><strong>Contact:</strong> <?php echo htmlspecialchars($request['email']); ?> | <?php echo htmlspecialchars($request['phone_number'] ?? 'N/A'); ?></p>
+                    
+                    <form action="" method="post">
+                        <input type="hidden" name="request_id" value="<?php echo $request['appointment_id']; ?>">
+                        <div class="form-group">
+                            <label for="doctor<?php echo $request['appointment_id']; ?>">Assign Doctor:</label>
+                            <select id="doctor<?php echo $request['appointment_id']; ?>" name="doctor_id" required>
+                                <option value="">Select Doctor</option>
+                                <?php foreach ($doctors as $doctor): ?>
+                                    <option value="<?php echo $doctor['doctor_id']; ?>"><?php echo htmlspecialchars($doctor['full_name']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="appointment_time<?php echo $request['appointment_id']; ?>">Appointment Time:</label>
+                            <input type="datetime-local" id="appointment_time<?php echo $request['appointment_id']; ?>" name="appointment_time" required>
+                        </div>
+                        <div class="quick-actions">
+                            <button type="submit" name="action" value="confirm" class="btn-primary">Confirm Appointment</button>
+                            <button type="submit" name="action" value="reject" class="btn-danger">Reject Request</button>
+                        </div>
+                    </form>
+                </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <p>No pending appointment requests.</p>
+            <?php endif; ?>
         </section>
 
         <!-- Walk-in Registration Form (Initially Hidden) -->
@@ -569,9 +702,9 @@
                     <label for="walkin_doctor">Assign to Doctor:</label>
                     <select id="walkin_doctor" name="walkin_doctor" required>
                         <option value="">Select Doctor</option>
-                        <option value="1">Dr. Smith</option>
-                        <option value="2">Dr. Johnson</option>
-                        <option value="3">Dr. Williams</option>
+                        <?php foreach ($doctors as $doctor): ?>
+                            <option value="<?php echo $doctor['doctor_id']; ?>"><?php echo htmlspecialchars($doctor['full_name']); ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 
@@ -600,9 +733,9 @@
                     <label for="emergency_doctor">Assign to Doctor:</label>
                     <select id="emergency_doctor" name="emergency_doctor" required>
                         <option value="">Select Doctor</option>
-                        <option value="1">Dr. Smith</option>
-                        <option value="2">Dr. Johnson</option>
-                        <option value="3">Dr. Williams</option>
+                        <?php foreach ($doctors as $doctor): ?>
+                            <option value="<?php echo $doctor['doctor_id']; ?>"><?php echo htmlspecialchars($doctor['full_name']); ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 
@@ -630,13 +763,16 @@
         <section id="queue-management" class="section-card">
             <h2>Current Queues</h2>
             
-            <!-- Dr. Smith's Queue -->
+            <?php foreach ($doctorQueues as $doctorName => $queue): ?>
             <div class="queue-section">
-                <h3>Dr. Smith's Queue</h3>
+                <h3><?php echo htmlspecialchars($doctorName); ?>'s Queue</h3>
                 <div class="queue-card">
-                    <div class="queue-item queue-item-emergency">
+                    <?php foreach ($queue as $appointment): ?>
+                    <div class="queue-item <?php echo $appointment['status'] === 'emergency' ? 'queue-item-emergency' : ($appointment['status'] === 'walk_in' ? 'queue-item-walkin' : ''); ?>">
                         <div>
-                            <strong>James Wilson</strong> (EMERGENCY) - Chest pain
+                            <strong><?php echo htmlspecialchars($appointment['patient_name']); ?></strong> 
+                            (<?php echo strtoupper($appointment['status']); ?>) - 
+                            <?php echo htmlspecialchars($appointment['reason']); ?>
                         </div>
                         <div class="queue-actions">
                             <button class="btn-primary">Move Up</button>
@@ -644,55 +780,10 @@
                             <button class="btn-danger">Remove</button>
                         </div>
                     </div>
-                    <div class="queue-item">
-                        <div>
-                            <strong>Sarah Johnson</strong> (Confirmed) - Routine check-up
-                        </div>
-                        <div class="queue-actions">
-                            <button class="btn-primary">Move Up</button>
-                            <button class="btn-secondary">Move Down</button>
-                            <button class="btn-danger">Remove</button>
-                        </div>
-                    </div>
-                    <div class="queue-item queue-item-walkin">
-                        <div>
-                            <strong>Walk-in: Maria Garcia</strong> - Fever and cough
-                        </div>
-                        <div class="queue-actions">
-                            <button class="btn-primary">Move Up</button>
-                            <button class="btn-secondary">Move Down</button>
-                            <button class="btn-danger">Remove</button>
-                        </div>
-                    </div>
+                    <?php endforeach; ?>
                 </div>
             </div>
-
-            <!-- Dr. Johnson's Queue -->
-            <div class="queue-section">
-                <h3>Dr. Johnson's Queue</h3>
-                <div class="queue-card">
-                    <div class="queue-item">
-                        <div>
-                            <strong>David Brown</strong> (Confirmed) - Allergy consultation
-                        </div>
-                        <div class="queue-actions">
-                            <button class="btn-primary">Move Up</button>
-                            <button class="btn-secondary">Move Down</button>
-                            <button class="btn-danger">Remove</button>
-                        </div>
-                    </div>
-                    <div class="queue-item queue-item-walkin">
-                        <div>
-                            <strong>Walk-in: Thomas Lee</strong> - Minor injury
-                        </div>
-                        <div class="queue-actions">
-                            <button class="btn-primary">Move Up</button>
-                            <button class="btn-secondary">Move Down</button>
-                            <button class="btn-danger">Remove</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <?php endforeach; ?>
         </section>
 
         <!-- Today's Appointments Overview -->
@@ -710,36 +801,28 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td>09:00 AM</td>
-                        <td>Sarah Johnson</td>
-                        <td>Dr. Smith</td>
-                        <td><span class="status-badge status-confirmed">Confirmed</span></td>
-                        <td><span class="status-badge status-waiting">Checked In</span></td>
-                        <td class="table-actions">
-                            <a href="#">Edit</a> | <a href="#">Cancel</a>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>10:30 AM</td>
-                        <td>James Wilson</td>
-                        <td>Dr. Smith</td>
-                        <td><span class="status-badge status-emergency">Emergency</span></td>
-                        <td><span class="status-badge status-waiting">In Treatment</span></td>
-                        <td class="table-actions">
-                            <a href="#">Edit</a> | <a href="#">Complete</a>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>11:00 AM</td>
-                        <td>Walk-in: Maria Garcia</td>
-                        <td>Dr. Smith</td>
-                        <td><span class="status-badge status-walkin">Walk-in</span></td>
-                        <td><span class="status-badge status-waiting">Waiting</span></td>
-                        <td class="table-actions">
-                            <a href="#">Edit</a> | <a href="#">Cancel</a>
-                        </td>
-                    </tr>
+                    <?php if (count($todayAppointments) > 0): ?>
+                        <?php foreach ($todayAppointments as $appointment): ?>
+                        <tr>
+                            <td><?php echo date('g:i A', strtotime($appointment['preferred_time'])); ?></td>
+                            <td><?php echo htmlspecialchars($appointment['patient_name']); ?></td>
+                            <td><?php echo htmlspecialchars($appointment['doctor_name']); ?></td>
+                            <td>
+                                <span class="status-badge status-<?php echo $appointment['status']; ?>">
+                                    <?php echo ucfirst(str_replace('_', ' ', $appointment['status'])); ?>
+                                </span>
+                            </td>
+                            <td><span class="status-badge status-waiting">Waiting</span></td>
+                            <td class="table-actions">
+                                <a href="#">Edit</a> | <a href="#">Cancel</a>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="6" style="text-align: center;">No appointments for today.</td>
+                        </tr>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </section>
