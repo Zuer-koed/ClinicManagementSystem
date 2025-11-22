@@ -1,36 +1,60 @@
 <?php
 session_start();
-
-// Database connection
 require_once 'db_connection.php';
 
-// Check if user is logged in
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'patient') {
-    header("Location: login.php");
-    exit();
-}
 
-// Fetch patient details from database
+$_SESSION['user_id'] = 2;
+$_SESSION['role'] = 'patient';
+
+$success = false;
+$error   = "";
+
+
 try {
     $stmt = $pdo->prepare("
-        SELECT p.full_name 
+        SELECT p.full_name, p.patient_id 
         FROM patient p 
         WHERE p.user_id = ?
     ");
     $stmt->execute([$_SESSION['user_id']]);
-    $patient = $stmt->fetch();
-    
+    $patient = $stmt->fetch(PDO::FETCH_ASSOC);
+
     if (!$patient) {
-        // Patient record not found, redirect to login
-        header("Location: logout.php");
-        exit();
+       
+        die('Patient profile not found for test user (user_id=2).');
     }
     
     $patient_name = $patient['full_name'];
+    $patient_id   = $patient['patient_id'];
+
     
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $date   = $_POST['date'] ?? null;
+        $time   = $_POST['time'] ?? null;
+        $reason = $_POST['reason'] ?? null;
+
+        if ($date && $time && $reason) {
+           
+            $doctor_id = 1; 
+
+            $insert = $pdo->prepare("
+                INSERT INTO appointment 
+                    (patient_id, doctor_id, preferred_date, preferred_time, reason, status)
+                VALUES 
+                    (?, ?, ?, ?, ?, 'pending')
+            ");
+            $insert->execute([$patient_id, $doctor_id, $date, $time, $reason]);
+
+            $success = true;
+        } else {
+            $error = "Please fill in all required fields.";
+        }
+    }
+
 } catch (PDOException $e) {
     error_log("Database error: " . $e->getMessage());
-    $patient_name = "Patient"; // Fallback name
+    $patient_name = "Patient";
+    $error = "An error occurred. Please try again later.";
 }
 ?>
 <!DOCTYPE html>
@@ -351,8 +375,7 @@ try {
             }
         }
     </style>
-</head>
-<body>
+<<body>
     <header>
         <div class="header-container">
             <img src="Logo.png" alt="Nexus Care Clinic Logo" class="logo">
@@ -388,10 +411,11 @@ try {
             <h2 class="section-title">Appointment Request Form</h2>
             
             <div class="form-container">
-                <div class="alert alert-success d-none" id="successMessage" role="alert">
-                    <h4 class="alert-heading">Success!</h4>
-                    Your appointment request has been submitted successfully! Our staff will contact you within 24-48 hours to confirm.
-                </div>
+                <?php if ($error): ?>
+                    <div class="alert alert-danger" role="alert">
+                        <?php echo htmlspecialchars($error); ?>
+                    </div>
+                <?php endif; ?>
         
                 <p>Please select your preferred date and time for an appointment. Our staff will review your request and confirm your appointment.</p>
         
@@ -411,17 +435,16 @@ try {
                             <option value="1:00 PM - 2:00 PM">1:00 PM - 2:00 PM</option>
                             <option value="2:00 PM - 3:00 PM">2:00 PM - 3:00 PM</option>
                             <option value="3:00 PM - 4:00 PM">3:00 PM - 4:00 PM</option>
-                            <option value="4:00 PM - 5:00 PM">4:00 PM - 5:00 PM</option>
                         </select>
                     </div>
                     
                     <div class="mb-3">
-                        <label for="reason" class="form-label">Reason for Visit:</label>
-                        <textarea id="reason" name="reason" rows="6" class="form-control" required placeholder="Please describe the reason for your visit"></textarea>
+                        <label for="reason" class="form-label">Reason for Appointment:</label>
+                        <textarea id="reason" name="reason" class="form-control" rows="4" required></textarea>
                     </div>
                     
                     <div class="button-group">
-                        <button type="submit" class="btn btn-primary">Request Appointment</button>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">Request Appointment</button>
                         <button type="reset" class="btn btn-secondary">Clear Form</button>
                         <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#helpModal">
                             Need Help?
@@ -431,9 +454,9 @@ try {
         
                 <div class="d-none text-center my-3" id="loadingIndicator">
                     <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
+                        <span class="visually-hidden">Loading.</span>
                     </div>
-                    <p class="mt-2">Submitting your request...</p>
+                    <p class="mt-2">Submitting your request.</p>
                 </div>
             </div>
             
@@ -463,6 +486,7 @@ try {
         </div>
     </footer>
 
+   
     <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -485,17 +509,23 @@ try {
                         <li>Arrive 15 minutes early for paperwork</li>
                         <li>Bring insurance card and photo ID</li>
                         <li>24-hour notice required for cancellations</li>
-                        <li>Late arrivals may be rescheduled</li>
-                        <li>Payment due at time of service</li>
-                        <li>Telehealth options available</li>
                     </ul>
-                    
-                    <div class="alert alert-warning mt-4">
-                        <strong>Emergency?</strong> Call us immediately at <strong>(+60)19-456 7567</strong>
-                    </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Got it!</button>
+            </div>
+        </div>
+    </div>
+
+    
+    <div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-success">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title" id="successModalLabel">Appointment Submitted</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    Your appointment request has been submitted successfully.<br>
+                    Our staff will contact you within 24-48 hours to confirm your appointment.
                 </div>
             </div>
         </div>
@@ -504,63 +534,49 @@ try {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const dateInput = document.getElementById('date');
-            const today = new Date().toISOString().split('T')[0];
-            dateInput.min = today;
-            dateInput.value = today;
-            
-            // Enhanced date validation to exclude weekends
-            dateInput.addEventListener('change', function() {
-                const selectedDate = new Date(this.value);
-                const dayOfWeek = selectedDate.getDay();
-                
-                // 0 = Sunday, 6 = Saturday
-                if (dayOfWeek === 0 || dayOfWeek === 6) {
-                    alert('Please select a weekday (Monday-Friday). We are closed on weekends.');
-                    this.value = today;
-                }
-            });
-            
-            document.getElementById('appointmentForm').addEventListener('submit', function(e) {
+    
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('appointmentForm');
+        const loader = document.getElementById('loadingIndicator');
+        const submitBtn = document.getElementById('submitBtn');
+
+        
+        if (form) {
+            form.addEventListener('submit', function (e) {
+               
                 e.preventDefault();
+
                 
-                // Basic form validation
-                const date = document.getElementById('date').value;
-                const time = document.getElementById('time').value;
-                const reason = document.getElementById('reason').value.trim();
-                
-                if (!date || !time || !reason) {
-                    alert('Please fill in all required fields.');
-                    return;
+                if (loader) {
+                    loader.classList.remove('d-none');
                 }
-                
-                if (reason.length < 10) {
-                    alert('Please provide a more detailed reason for your visit (at least 10 characters).');
-                    return;
+
+               
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Submitting...';
                 }
-                
-                document.getElementById('loadingIndicator').classList.remove('d-none');
-                
-                // Simulate form submission
-                setTimeout(function() {
-                    document.getElementById('loadingIndicator').classList.add('d-none');
-                    document.getElementById('successMessage').classList.remove('d-none');
-                    
-                    // Reset form but keep today's date
-                    e.target.reset();
-                    dateInput.value = today;
-                    
-                    // Scroll to top to show success message
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                    
-                    // Hide success message after 5 seconds
-                    setTimeout(function() {
-                        document.getElementById('successMessage').classList.add('d-none');
-                    }, 5000);
-                }, 1500);
+
+          
+                setTimeout(function () {
+                    form.submit();
+                }, 1350); 
             });
-        });
-    </script>
+        }
+
+        <?php if ($success): ?>
+        const successModalEl = document.getElementById('successModal');
+        if (successModalEl) {
+            const successModal = new bootstrap.Modal(successModalEl);
+            successModal.show();
+
+            setTimeout(function () {
+                successModal.hide();
+            }, 1500); 
+        }
+        <?php endif; ?>
+    });
+</script>
+
 </body>
 </html>

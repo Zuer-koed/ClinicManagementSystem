@@ -1,39 +1,71 @@
 <?php
 session_start();
 
-// Database connection
+
 require_once 'db_connection.php';
 
-// Check if user is logged in
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'patient') {
-    header("Location: login.php");
-    exit();
-}
 
-// Fetch patient details from database
+$_SESSION['user_id'] = 2;
+$_SESSION['role'] = 'patient';
+
+
+
 try {
     $stmt = $pdo->prepare("
-        SELECT p.full_name 
+        SELECT p.full_name, p.patient_id
         FROM patient p 
         WHERE p.user_id = ?
     ");
     $stmt->execute([$_SESSION['user_id']]);
-    $patient = $stmt->fetch();
-    
+    $patient = $stmt->fetch(PDO::FETCH_ASSOC);
+
     if (!$patient) {
-        // Patient record not found, redirect to login
-        header("Location: logout.php");
-        exit();
+        
+        die('Patient profile not found for test user (user_id=2).');
     }
-    
+
     $patient_name = $patient['full_name'];
-    
+    $patient_id   = $patient['patient_id'];
+
+    // Get next appointment
+    $nextStmt = $pdo->prepare("
+        SELECT a.preferred_date, a.preferred_time, d.full_name AS doctor_name, a.status
+        FROM appointment a
+        JOIN doctor d ON a.doctor_id = d.doctor_id
+        WHERE a.patient_id = ?
+          AND a.status IN ('pending', 'confirmed')
+          AND a.preferred_date >= CURDATE()
+        ORDER BY a.preferred_date ASC
+        LIMIT 1
+    ");
+    $nextStmt->execute([$patient_id]);
+    $nextAppointment = $nextStmt->fetch(PDO::FETCH_ASSOC);
+
+    // Statistics
+    $statsStmt = $pdo->prepare("
+        SELECT
+            COUNT(*) AS total,
+            SUM(a.status = 'pending')   AS pending,
+            SUM(a.status = 'completed') AS completed,
+            SUM(a.status = 'confirmed') AS upcoming
+        FROM appointment a
+        WHERE a.patient_id = ?
+    ");
+    $statsStmt->execute([$patient_id]);
+    $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
+
 } catch (PDOException $e) {
     error_log("Database error: " . $e->getMessage());
-    $patient_name = "Patient"; // Fallback name
+    $patient_name   = "Patient";
+    $nextAppointment = null;
+    $stats = [
+        'total'     => 0,
+        'pending'   => 0,
+        'completed' => 0,
+        'upcoming'  => 0,
+    ];
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -273,51 +305,6 @@ try {
             transform: translateY(-2px);
         }
         
-       
-        .status-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-left: 10px;
-        }
-        
-        .status-confirmed {
-            background-color: #e7f7ef;
-            color: #0d6832;
-        }
-        
-        .status-pending {
-            background-color: #fff4e6;
-            color: #cc5c00;
-        }
-        
-        .status-cancelled {
-            background-color: #ffe6e6;
-            color: #cc0000;
-        }
-        
-        footer {
-            background-color: #1d4159ff;
-            color: white;
-            text-align: center;
-            padding: 30px 0;
-            margin-top: 50px;
-        }
-        
-        .footer-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 20px;
-        }
-        
-        footer p {
-            color: white;
-            font-size: 16px;
-        }
-        
-       
         .quick-actions {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -340,6 +327,25 @@ try {
         .action-btn:hover {
             background-color: #4d93c2ff;
             color: white;
+        }
+        
+        footer {
+            background-color: #1d4159ff;
+            color: white;
+            text-align: center;
+            padding: 30px 0;
+            margin-top: 50px;
+        }
+        
+        .footer-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        footer p {
+            color: white;
+            font-size: 16px;
         }
         
         @media (max-width: 768px) {
@@ -376,11 +382,6 @@ try {
                 text-align: center;
             }
             
-            nav a {
-                padding: 14px 8px;
-                font-size: 15px;
-            }
-            
             .dashboard-section {
                 padding: 25px;
             }
@@ -405,6 +406,7 @@ try {
                     <h1>Patient Dashboard</h1>
                     <p>Welcome, <?php echo htmlspecialchars($patient_name); ?>!</p>
                 </div>
+                
                 <a href="logout.php" class="logout-link">Logout</a>
             </div>
             
@@ -423,39 +425,55 @@ try {
     </header>
 
     <main>
+       
         <div class="dashboard-section">
             <h2>Next Appointment</h2>
-            
 
-            <div class="no-appointment">
-                <p>No upcoming appointments scheduled</p>
-                <p style="font-size: 14px; margin-bottom: 25px;">Book your next appointment to get started with your healthcare journey.</p>
-                <a href="book_appointment.php" class="btn-primary">Book New Appointment</a>
-            </div>
+            <?php if ($nextAppointment): ?>
+                <div class="appointment-info">
+                    <p><strong>Date:</strong> <?php echo htmlspecialchars($nextAppointment['preferred_date']); ?></p>
+                    <p><strong>Time:</strong> <?php echo htmlspecialchars($nextAppointment['preferred_time']); ?></p>
+                    <p><strong>Doctor:</strong> <?php echo htmlspecialchars($nextAppointment['doctor_name']); ?></p>
+                    <p>
+                        <strong>Status:</strong> 
+                        <span class="status-badge status-<?php echo htmlspecialchars($nextAppointment['status']); ?>">
+                            <?php echo ucfirst(htmlspecialchars($nextAppointment['status'])); ?>
+                        </span>
+                    </p>
+                </div>
+            <?php else: ?>
+                <div class="no-appointment">
+                    <p>No upcoming appointments scheduled</p>
+                    <p style="font-size: 14px; margin-bottom: 25px;">
+                        Book your next appointment to get started with your healthcare journey.
+                    </p>
+                    <a href="book_appointment.php" class="btn-primary">Book New Appointment</a>
+                </div>
+            <?php endif; ?>
         </div>
         
+        <!-- Stats + Quick Actions -->
         <div class="dashboard-section">
             <h2>Quick Stats</h2>
             <div class="stats-grid">
                 <div class="stat-card">
-                    <div class="stat-number">0</div>
+                    <div class="stat-number"><?php echo (int)$stats['total']; ?></div>
                     <div class="stat-label">Total Appointments</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number">0</div>
+                    <div class="stat-number"><?php echo (int)$stats['pending']; ?></div>
                     <div class="stat-label">Pending Appointments</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number">0</div>
+                    <div class="stat-number"><?php echo (int)$stats['completed']; ?></div>
                     <div class="stat-label">Completed Visits</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number">0</div>
+                    <div class="stat-number"><?php echo (int)$stats['upcoming']; ?></div>
                     <div class="stat-label">Upcoming Visits</div>
                 </div>
             </div>
             
-            <!-- NEW: Quick Actions Section -->
             <div style="margin-top: 30px;">
                 <h3 style="color: #4d93c2ff; margin-bottom: 15px; font-size: 18px;">Quick Actions</h3>
                 <div class="quick-actions">

@@ -1,3 +1,56 @@
+<?php
+session_start();
+require_once 'db_connection.php';
+
+
+$_SESSION['user_id'] = 2;
+$_SESSION['role'] = 'patient';
+
+
+try {
+    
+    $stmt = $pdo->prepare("
+        SELECT p.full_name, p.patient_id
+        FROM patient p
+        WHERE p.user_id = ?
+    ");
+    $stmt->execute([$_SESSION['user_id']]);
+    $patient = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$patient) {
+       
+        die("Patient profile not found for test user.");
+    }
+
+    $patient_name = $patient['full_name'];
+    $patient_id   = $patient['patient_id'];
+
+    
+    $mhStmt = $pdo->prepare("
+        SELECT 
+            mh.diagnosis_date,
+            mh.diagnosis,
+            mh.medication_name,
+            mh.dosage,
+            mh.frequency,
+            mh.notes,
+            mh.status,
+            d.full_name AS doctor_name,
+            d.specialization
+        FROM medical_history mh
+        JOIN doctor d ON mh.doctor_id = d.doctor_id
+        WHERE mh.patient_id = ?
+        ORDER BY mh.diagnosis_date DESC, mh.mhistory_id DESC
+    ");
+    $mhStmt->execute([$patient_id]);
+    $history = $mhStmt->fetchAll(PDO::FETCH_ASSOC);
+
+} catch (PDOException $e) {
+    error_log("Database error: " . $e->getMessage());
+    $patient_name = "Patient";
+    $history = [];
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -192,9 +245,19 @@
             margin-top: 5px;
         }
         
-        .status-completed {
+        .status-active {
+            background-color: #fff4e6;
+            color: #cc5c00;
+        }
+        
+        .status-resolved {
             background-color: #e7f7ef;
             color: #0d6832;
+        }
+        
+        .status-chronic {
+            background-color: #e6f0ff;
+            color: #0d3f68;
         }
         
         .doctor-specialty {
@@ -223,7 +286,6 @@
             font-size: 16px;
         }
         
-       
         .info-message {
             background-color: #f0f8ff;
             padding: 15px;
@@ -237,7 +299,6 @@
             color: #4d93c2ff;
             font-size: 14px;
         }
-        
         
         @media print {
             .logout-link, nav {
@@ -300,7 +361,7 @@
             <div class="welcome-section">
                 <div class="welcome-message">
                     <h1>Medical History</h1>
-                    <p>Welcome, [Patient Name]!</p>
+                    <p>Welcome, <?php echo htmlspecialchars($patient_name); ?>!</p>
                 </div>
                 <a href="logout.php" class="logout-link">Logout</a>
             </div>
@@ -325,7 +386,6 @@
         <div class="history-section">
             <h2 class="section-title">Treatment Records</h2>
             
-            <!-- Desktop Table View -->
             <table class="medical-table" aria-label="Patient medical history records">
                 <thead>
                     <tr>
@@ -337,24 +397,42 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td>
-                            October 15, 2023<br>
-                            <span class="record-status status-completed">Completed</span>
-                        </td>
-                        <td>
-                            Dr. Hajimi<br>
-                            <span class="doctor-specialty">General Practitioner</span>
-                        </td>
-                        <td>Seasonal allergies</td>
-                        <td>Loratadine 10mg, once daily</td>
-                        <td class="notes-cell">Patient presented with watery eyes, sneezing, and nasal congestion. Symptoms consistent with seasonal allergies. Recommended over-the-counter antihistamine and nasal spray.</td>
-                    </tr>
-
+                    <?php if (empty($history)): ?>
+                        <tr>
+                            <td colspan="5" class="empty-row">
+                                No medical history records found.
+                            </td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($history as $row): ?>
+                            <tr>
+                                <td>
+                                    <?php echo htmlspecialchars($row['diagnosis_date']); ?><br>
+                                    <span class="record-status status-<?php echo htmlspecialchars($row['status']); ?>">
+                                        <?php echo ucfirst(htmlspecialchars($row['status'])); ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <?php echo htmlspecialchars($row['doctor_name']); ?><br>
+                                    <span class="doctor-specialty">
+                                        <?php echo htmlspecialchars($row['specialization']); ?>
+                                    </span>
+                                </td>
+                                <td><?php echo htmlspecialchars($row['diagnosis']); ?></td>
+                                <td>
+                                    <?php echo htmlspecialchars($row['medication_name']); ?>
+                                    <?php echo $row['dosage'] ? ' - ' . htmlspecialchars($row['dosage']) : ''; ?><br>
+                                    <?php echo htmlspecialchars($row['frequency']); ?>
+                                </td>
+                                <td class="notes-cell">
+                                    <?php echo nl2br(htmlspecialchars($row['notes'])); ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </tbody>
             </table>
             
-
             <div class="info-message">
                 <p><strong>Note:</strong> This is your complete medical history. Contact the clinic if you notice any discrepancies.</p>
             </div>

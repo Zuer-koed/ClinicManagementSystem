@@ -1,3 +1,67 @@
+<?php
+session_start();
+require_once 'db_connection.php';
+
+
+
+$_SESSION['user_id'] = 2;
+$_SESSION['role'] = 'patient';
+
+
+try {
+    
+    $stmt = $pdo->prepare("
+        SELECT p.full_name, p.patient_id
+        FROM patient p
+        WHERE p.user_id = ?
+    ");
+    $stmt->execute([$_SESSION['user_id']]);
+    $patient = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$patient) {
+        die('Patient profile not found for test user (user_id=2).');
+    }
+
+    $patient_name = $patient['full_name'];
+    $patient_id   = $patient['patient_id'];
+
+    
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_id'])) {
+        $cancel_id = (int)$_POST['cancel_id'];
+
+        $cancelStmt = $pdo->prepare("
+            UPDATE appointment
+            SET status = 'cancelled'
+            WHERE appointment_id = ?
+              AND patient_id = ?
+              AND status = 'pending'
+        ");
+        $cancelStmt->execute([$cancel_id, $patient_id]);
+    }
+
+    
+    $appointmentStmt = $pdo->prepare("
+        SELECT 
+            a.appointment_id,
+            a.preferred_date,
+            a.preferred_time,
+            a.reason,
+            a.status,
+            d.full_name AS doctor_name
+        FROM appointment a
+        JOIN doctor d ON a.doctor_id = d.doctor_id
+        WHERE a.patient_id = ?
+        ORDER BY a.preferred_date DESC, a.appointment_id DESC
+    ");
+    $appointmentStmt->execute([$patient_id]);
+    $appointments = $appointmentStmt->fetchAll(PDO::FETCH_ASSOC);
+
+} catch (PDOException $e) {
+    error_log("Database error: " . $e->getMessage());
+    $patient_name = "Patient";
+    $appointments = [];
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -205,6 +269,11 @@
             font-weight: 600;
         }
         
+        .status-cancelled {
+            color: #dc3545;
+            font-weight: 600;
+        }
+        
         .btn-cancel {
             background-color: #ff6b6b;
             color: white;
@@ -243,7 +312,6 @@
             color: white;
             font-size: 16px;
         }
-        
         
         @media (max-width: 768px) {
             nav ul {
@@ -290,7 +358,7 @@
             <div class="welcome-section">
                 <div class="welcome-message">
                     <h1>My Appointments</h1>
-                    <p>Welcome, [Patient Name]!</p>
+                    <p>Welcome, <?php echo htmlspecialchars($patient_name); ?>!</p>
                 </div>
                 <a href="logout.php" class="logout-link">Logout</a>
             </div>
@@ -308,7 +376,7 @@
             </nav>
         </div>
     </header>
-
+    
     <main>
         <div class="page-header">
             <h1 class="page-title">Your Appointments</h1>
@@ -330,57 +398,47 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td>2023-09-20</td>
-                        <td>10:30 AM</td>
-                        <td>Dr. Alen</td>
-                        <td>Follow-up consultation</td>
-                        <td class="status-confirmed">Confirmed</td>
-                        <td>
-                            <button class="btn-cancel">Cancel</button>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>2023-10-05</td>
-                        <td>2:15 PM</td>
-                        <td>Dr. Hanami</td>
-                        <td>Annual physical exam</td>
-                        <td class="status-pending">Pending</td>
-                        <td>
-                            <button class="btn-cancel">Cancel</button>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>2023-09-05</td>
-                        <td>9:00 AM</td>
-                        <td>Dr. Jacky</td>
-                        <td>Allergy symptoms</td>
-                        <td class="status-completed">Completed</td>
-                        <td>
-                            <button class="btn-cancel" disabled>Cancel</button>
-                        </td>
-                    </tr>
+                    <?php if (empty($appointments)): ?>
+                        <tr>
+                            <td colspan="6" style="text-align:center; color:#999; font-style:italic;">
+                                No appointments found.
+                            </td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($appointments as $row): ?>
+                            <tr>
+                                <td><?php echo htmlspecialchars($row['preferred_date']); ?></td>
+                                <td><?php echo htmlspecialchars($row['preferred_time']); ?></td>
+                                <td><?php echo htmlspecialchars($row['doctor_name']); ?></td>
+                                <td><?php echo htmlspecialchars($row['reason']); ?></td>
+                                <td class="status-<?php echo htmlspecialchars($row['status']); ?>">
+                                    <?php echo ucfirst(htmlspecialchars($row['status'])); ?>
+                                </td>
+                                <td>
+                                    <form method="post" style="display:inline;">
+                                        <input type="hidden" name="cancel_id" value="<?php echo (int)$row['appointment_id']; ?>">
+                                        <button
+                                            type="submit"
+                                            class="btn-cancel"
+                                            <?php echo ($row['status'] === 'pending') ? '' : 'disabled'; ?>
+                                            onclick="return this.disabled ? false : confirm('Are you sure you want to cancel this appointment?');"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
     </main>
-
+    
     <footer>
         <div class="footer-container">
             <p>&copy; 2025 Nexus Care. All rights reserved.</p>
         </div>
     </footer>
-
-    <script>
-       
-        document.querySelectorAll('.btn-cancel').forEach(btn => {
-            btn.onclick = function() {
-                if (!this.disabled) {
-                    return confirm('Are you sure you want to cancel this appointment?');
-                }
-                return false;
-            };
-        });
-    </script>
 </body>
 </html>
