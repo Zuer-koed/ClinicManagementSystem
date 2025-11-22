@@ -1,57 +1,80 @@
-<?php
-// Start session and include database connection
+<?php 
 session_start();
 require_once 'db_connection.php';
 
 
-$_SESSION['user_id'] = 2;
-$_SESSION['role'] = 'patient';
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
+    header("Location: login.php?error=please_login");
+    exit();
+}
 
 
-
-$user_id = $_SESSION['user_id'];
+if ($_SESSION['role'] !== 'patient') {
+    header("Location: login.php?error=unauthorized");
+    exit();
+}
 
 try {
+ 
     $stmt = $pdo->prepare("
-        SELECT 
-            p.patient_id,
-            p.full_name,
-            p.date_of_birth,
-            u.email,
-            p.phone_number,
-            p.address,
-            p.emergency_contact_name,
-            p.emergency_contact_phone,
-            p.blood_type,
-            p.primary_care_physician,
-            p.gender
+        SELECT p.full_name, p.patient_id
         FROM patient p
-        JOIN user u ON p.user_id = u.user_id
         WHERE p.user_id = ?
     ");
-    
-    $stmt->execute([$user_id]);
-    $patient = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if (!$patient) {
-        die("Patient profile not found for test user. Please check your test data.");
+    $stmt->execute([$_SESSION['user_id']]);
+    $patientBasic = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$patientBasic) {
+        header("Location: login.php?error=no_patient_profile");
+        exit();
     }
+
+    $patient_name = $patientBasic['full_name'];
+    $patient_id   = $patientBasic['patient_id'];
+
     
-} catch(PDOException $e) {
-    error_log("Error fetching patient data: " . $e->getMessage());
+    $detailStmt = $pdo->prepare("
+    SELECT 
+        p.patient_id,
+        p.full_name,
+        p.date_of_birth,
+        u.email,
+        p.phone_number,
+        p.address,
+        p.emergency_contact_name,
+        p.emergency_contact_phone,
+        p.blood_type,
+        p.gender
+    FROM patient p
+    JOIN user u ON p.user_id = u.user_id
+    WHERE p.patient_id = ?
+ ");
+
+    $detailStmt->execute([$patient_id]);
+    $patient = $detailStmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$patient) {
+        header("Location: login.php?error=no_patient_profile");
+        exit();
+    }
+
+} catch (PDOException $e) {
+    error_log("Error fetching patient data in patient_profile: " . $e->getMessage());
     die("Error loading profile data. Please try again later.");
 }
 
-// Format date of birth for display (if not null)
+
 $formatted_dob = $patient['date_of_birth']
     ? date('F j, Y', strtotime($patient['date_of_birth']))
     : 'N/A';
 
-// Format patient ID for display
+
 $display_patient_id = "P-" . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
 
-// Format emergency contact
-$emergency_contact = trim(($patient['emergency_contact_name'] ?? '') . " (" . ($patient['emergency_contact_phone'] ?? '') . ")");
+
+$emergency_contact = trim(
+    ($patient['emergency_contact_name'] ?? '') . " (" . ($patient['emergency_contact_phone'] ?? '') . ")"
+);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -60,7 +83,6 @@ $emergency_contact = trim(($patient['emergency_contact_name'] ?? '') . " (" . ($
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nexus Care - My Profile</title>
     <style>
-       
         * {
             margin: 0;
             padding: 0;
@@ -418,7 +440,6 @@ $emergency_contact = trim(($patient['emergency_contact_name'] ?? '') . " (" . ($
         <div class="profile-section">
             <h2 class="section-title">Personal Details</h2>
             
-           
             <table class="profile-table" aria-label="Patient profile information">
                 <tr>
                     <th scope="row">Patient ID</th>
@@ -441,6 +462,10 @@ $emergency_contact = trim(($patient['emergency_contact_name'] ?? '') . " (" . ($
                     <td><?php echo htmlspecialchars($patient['phone_number']); ?></td>
                 </tr>
                 <tr>
+                    <th scope="row">Gender</th>
+                    <td><?php echo htmlspecialchars($patient['gender'] ?? 'N/A'); ?></td>
+                </tr>
+                <tr>
                     <th scope="row">Address</th>
                     <td><?php echo htmlspecialchars($patient['address']); ?></td>
                 </tr>
@@ -451,10 +476,6 @@ $emergency_contact = trim(($patient['emergency_contact_name'] ?? '') . " (" . ($
                 <tr>
                     <th scope="row">Blood Type</th>
                     <td><?php echo htmlspecialchars($patient['blood_type']); ?></td>
-                </tr>
-                <tr>
-                    <th scope="row">Primary Care Physician</th>
-                    <td><?php echo htmlspecialchars($patient['primary_care_physician']); ?></td>
                 </tr>
             </table>
             
@@ -481,6 +502,10 @@ $emergency_contact = trim(($patient['emergency_contact_name'] ?? '') . " (" . ($
                     <span class="value"><?php echo htmlspecialchars($patient['phone_number']); ?></span>
                 </div>
                 <div class="profile-card">
+                    <span class="label">Gender</span>
+                    <span class="value"><?php echo htmlspecialchars($patient['gender'] ?? 'N/A'); ?></span>
+                </div>
+                <div class="profile-card">
                     <span class="label">Address</span>
                     <span class="value"><?php echo htmlspecialchars($patient['address']); ?></span>
                 </div>
@@ -491,10 +516,6 @@ $emergency_contact = trim(($patient['emergency_contact_name'] ?? '') . " (" . ($
                 <div class="profile-card">
                     <span class="label">Blood Type</span>
                     <span class="value"><?php echo htmlspecialchars($patient['blood_type']); ?></span>
-                </div>
-                <div class="profile-card">
-                    <span class="label">Primary Care Physician</span>
-                    <span class="value"><?php echo htmlspecialchars($patient['primary_care_physician']); ?></span>
                 </div>
             </div>
             

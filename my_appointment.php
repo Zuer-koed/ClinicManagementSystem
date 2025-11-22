@@ -3,13 +3,19 @@ session_start();
 require_once 'db_connection.php';
 
 
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
+    header("Location: login.php?error=please_login");
+    exit();
+}
 
-$_SESSION['user_id'] = 2;
-$_SESSION['role'] = 'patient';
 
+if ($_SESSION['role'] !== 'patient') {
+    header("Location: login.php?error=unauthorized");
+    exit();
+}
 
 try {
-    
+   
     $stmt = $pdo->prepare("
         SELECT p.full_name, p.patient_id
         FROM patient p
@@ -18,13 +24,16 @@ try {
     $stmt->execute([$_SESSION['user_id']]);
     $patient = $stmt->fetch(PDO::FETCH_ASSOC);
 
+    
     if (!$patient) {
-        die('Patient profile not found for test user (user_id=2).');
+        header("Location: login.php?error=no_patient_profile");
+        exit();
     }
 
     $patient_name = $patient['full_name'];
     $patient_id   = $patient['patient_id'];
 
+    
     
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_id'])) {
         $cancel_id = (int)$_POST['cancel_id'];
@@ -49,7 +58,7 @@ try {
             a.status,
             d.full_name AS doctor_name
         FROM appointment a
-        JOIN doctor d ON a.doctor_id = d.doctor_id
+        LEFT JOIN doctor d ON a.doctor_id = d.doctor_id
         WHERE a.patient_id = ?
         ORDER BY a.preferred_date DESC, a.appointment_id DESC
     ");
@@ -57,11 +66,12 @@ try {
     $appointments = $appointmentStmt->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (PDOException $e) {
-    error_log("Database error: " . $e->getMessage());
+    error_log("Database error in my_appointment: " . $e->getMessage());
     $patient_name = "Patient";
     $appointments = [];
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -409,7 +419,18 @@ try {
                             <tr>
                                 <td><?php echo htmlspecialchars($row['preferred_date']); ?></td>
                                 <td><?php echo htmlspecialchars($row['preferred_time']); ?></td>
-                                <td><?php echo htmlspecialchars($row['doctor_name']); ?></td>
+
+                                
+                                <td>
+                                    <?php
+                                    if ($row['status'] === 'confirmed' && !empty($row['doctor_name'])) {
+                                        echo htmlspecialchars($row['doctor_name']);
+                                    } else {
+                                        echo 'To be assigned';
+                                    }
+                                    ?>
+                                </td>
+
                                 <td><?php echo htmlspecialchars($row['reason']); ?></td>
                                 <td class="status-<?php echo htmlspecialchars($row['status']); ?>">
                                     <?php echo ucfirst(htmlspecialchars($row['status'])); ?>

@@ -3,12 +3,19 @@ session_start();
 require_once 'db_connection.php';
 
 
-$_SESSION['user_id'] = 2;
-$_SESSION['role'] = 'patient';
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
+    header("Location: login.php?error=please_login");
+    exit();
+}
 
+
+if ($_SESSION['role'] !== 'patient') {
+    header("Location: login.php?error=unauthorized");
+    exit();
+}
 
 try {
-    
+ 
     $stmt = $pdo->prepare("
         SELECT p.full_name, p.patient_id
         FROM patient p
@@ -18,14 +25,13 @@ try {
     $patient = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$patient) {
-       
-        die("Patient profile not found for test user.");
+        die("Patient profile not found for current user.");
     }
 
     $patient_name = $patient['full_name'];
     $patient_id   = $patient['patient_id'];
 
-    
+  
     $mhStmt = $pdo->prepare("
         SELECT 
             mh.diagnosis_date,
@@ -46,7 +52,7 @@ try {
     $history = $mhStmt->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (PDOException $e) {
-    error_log("Database error: " . $e->getMessage());
+    error_log("Database error in medical_history: " . $e->getMessage());
     $patient_name = "Patient";
     $history = [];
 }
@@ -235,7 +241,6 @@ try {
             word-wrap: break-word;
         }
         
-        /* Status indicator for records */
         .record-status {
             display: inline-block;
             padding: 4px 12px;
