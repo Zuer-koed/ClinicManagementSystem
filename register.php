@@ -10,12 +10,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $email = trim($_POST['email']);
     $phone = trim($_POST['phone']);
     $dob = $_POST['dob'];
+    $gender = isset($_POST['gender']) ? $_POST['gender'] : '';
     $address = trim($_POST['address']);
     $password = $_POST['password'];
     $confirm_password = $_POST['confirm_password'];
     
     // Validation
-    if (empty($name) || empty($email) || empty($dob) || empty($password) || empty($confirm_password)) {
+    if (empty($name) || empty($email) || empty($dob) || empty($gender) || empty($password) || empty($confirm_password)) {
         $error = "Please fill in all required fields.";
     } elseif ($password !== $confirm_password) {
         $error = "Passwords do not match.";
@@ -40,8 +41,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $user_id = $pdo->lastInsertId();
                 
                 // Insert into patient table
-                $stmt = $pdo->prepare("INSERT INTO patient (user_id, full_name, date_of_birth, address, phone_number) VALUES (?, ?, ?, ?, ?)");
-                $stmt->execute([$user_id, $name, $dob, $address, $phone]);
+                $stmt = $pdo->prepare("INSERT INTO patient (user_id, full_name, date_of_birth, gender, address, phone_number) VALUES (?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$user_id, $name, $dob, $gender, $address, $phone]);
                 
                 // Commit transaction
                 $pdo->commit();
@@ -399,6 +400,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     <div class="input-with-icon">
                         <i class="fas fa-calendar input-icon"></i>
                         <input type="date" id="dob" name="dob" required value="<?php echo isset($_POST['dob']) ? htmlspecialchars($_POST['dob']) : ''; ?>">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="gender">Gender</label>
+                    <div class="input-with-icon">
+                        <i class="fas fa-venus-mars input-icon"></i>
+                        <select id="gender" name="gender" required>
+                            <option value="">Select Gender</option>
+                            <option value="Male" <?php echo (isset($_POST['gender']) && $_POST['gender'] == 'Male') ? 'selected' : ''; ?>>Male</option>
+                            <option value="Female" <?php echo (isset($_POST['gender']) && $_POST['gender'] == 'Female') ? 'selected' : ''; ?>>Female</option>
+                            <option value="Other" <?php echo (isset($_POST['gender']) && $_POST['gender'] == 'Other') ? 'selected' : ''; ?>>Other</option>
+                            <option value="Prefer not to say" <?php echo (isset($_POST['gender']) && $_POST['gender'] == 'Prefer not to say') ? 'selected' : ''; ?>>Prefer not to say</option>
+                        </select>
                     </div>
                 </div>
 
