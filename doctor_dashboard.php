@@ -2,15 +2,15 @@
 session_start();
 require_once 'db_connection.php';
 
-// Check if user is logged in and is a doctor
+
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'doctor') {
     header('Location: login.php');
     exit();
 }
 
-// Check if doctor_id is set in session, if not redirect to login
+
 if (!isset($_SESSION['doctor_id'])) {
-    // Try to get doctor_id from database
+    
     $user_id = $_SESSION['user_id'];
     $stmt = $pdo->prepare("SELECT doctor_id FROM doctor WHERE user_id = ?");
     $stmt->execute([$user_id]);
@@ -19,7 +19,7 @@ if (!isset($_SESSION['doctor_id'])) {
     if ($doctor && isset($doctor['doctor_id'])) {
         $_SESSION['doctor_id'] = $doctor['doctor_id'];
     } else {
-        // If still no doctor_id, redirect to login
+        
         header('Location: login.php');
         exit();
     }

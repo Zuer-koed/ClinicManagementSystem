@@ -2,12 +2,10 @@
 session_start();
 require_once 'db_connection.php';
 
-
 if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
     header("Location: login.php?error=please_login");
     exit();
 }
-
 
 if ($_SESSION['role'] !== 'patient') {
     header("Location: login.php?error=unauthorized");
