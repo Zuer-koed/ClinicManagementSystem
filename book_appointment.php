@@ -547,7 +547,7 @@ try {
         </div>
     </div>
 
-    <!-- ✅ Success Modal -->
+   
     <div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-success">
@@ -563,7 +563,7 @@ try {
         </div>
     </div>
 
-    <!-- ✅ Error Modal（跟 success 一樣 style，用來顯示 $error） -->
+    
     <div class="modal fade" id="errorModal" tabindex="-1" aria-labelledby="errorModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-danger">
