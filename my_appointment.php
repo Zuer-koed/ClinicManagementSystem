@@ -421,15 +421,16 @@ try {
                                 <td><?php echo htmlspecialchars($row['preferred_time']); ?></td>
 
                                 
-                                <td>
-                                    <?php
-                                    if ($row['status'] === 'confirmed' && !empty($row['doctor_name'])) {
-                                        echo htmlspecialchars($row['doctor_name']);
-                                    } else {
-                                        echo 'To be assigned';
-                                    }
-                                    ?>
-                                </td>
+                              <td>
+                                <?php
+                                if (in_array($row['status'], ['confirmed', 'completed']) && !empty($row['doctor_name'])) {
+                                    echo htmlspecialchars($row['doctor_name']);
+                                } else {
+                                    echo 'To be assigned';
+                                }
+                                ?>
+                              </td>
+
 
                                 <td><?php echo htmlspecialchars($row['reason']); ?></td>
                                 <td class="status-<?php echo htmlspecialchars($row['status']); ?>">
