@@ -62,46 +62,49 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         } else {
             $error = "Current password is incorrect!";
         }
-        
-    } elseif (isset($_POST['update_notifications'])) {
-        // Update notification preferences
-        $email_notifications = isset($_POST['email_notifications']) ? 1 : 0;
-        $sms_notifications = isset($_POST['sms_notifications']) ? 1 : 0;
-        $appointment_reminders = isset($_POST['appointment_reminders']) ? 1 : 0;
-        
-        $notification_preferences = json_encode([
-            'email' => $email_notifications,
-            'sms' => $sms_notifications,
-            'appointment_reminders' => $appointment_reminders
-        ]);
-        
-        $stmt = $pdo->prepare("UPDATE doctor SET notification_preferences = ? WHERE doctor_id = ?");
-        $stmt->execute([$notification_preferences, $doctor_id]);
-        
-        $success = "Notification preferences updated successfully!";
-        
-    } elseif (isset($_POST['update_emergency_contact'])) {
-        // Update emergency contact
-        $emergency_contact_name = $_POST['emergency_contact_name'];
-        $emergency_contact_phone = $_POST['emergency_contact_phone'];
-        $emergency_contact_relationship = $_POST['emergency_contact_relationship'];
-        $emergency_contact_email = $_POST['emergency_contact_email'];
-        
-        $stmt = $pdo->prepare("
-            UPDATE doctor 
-            SET emergency_contact_name = ?, emergency_contact_phone = ?, 
-                emergency_contact_relationship = ?, emergency_contact_email = ?
-            WHERE doctor_id = ?
-        ");
-        $stmt->execute([
-            $emergency_contact_name, 
-            $emergency_contact_phone, 
-            $emergency_contact_relationship, 
-            $emergency_contact_email, 
-            $doctor_id
-        ]);
-        
-        $success = "Emergency contact updated successfully!";
+    } elseif (isset($_POST['update_photo'])) {
+        // Handle profile picture upload
+        if (isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] === UPLOAD_ERR_OK) {
+            $upload_dir = 'uploads/doctor_profiles/';
+            
+            // Create directory if it doesn't exist
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0755, true);
+            }
+            
+            $file_tmp = $_FILES['profile_picture']['tmp_name'];
+            $file_name = time() . '_' . basename($_FILES['profile_picture']['name']);
+            $file_path = $upload_dir . $file_name;
+            
+            // Validate file type
+            $allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+            $file_type = $_FILES['profile_picture']['type'];
+            
+            if (in_array($file_type, $allowed_types)) {
+                // Validate file size (max 2MB)
+                if ($_FILES['profile_picture']['size'] <= 2 * 1024 * 1024) {
+                    if (move_uploaded_file($file_tmp, $file_path)) {
+                        // Update database with new profile picture path
+                        $stmt = $pdo->prepare("UPDATE doctor SET profile_picture = ? WHERE doctor_id = ?");
+                        $stmt->execute([$file_path, $doctor_id]);
+                        $success = "Profile picture updated successfully!";
+                        
+                        // Refresh doctor data
+                        $stmt = $pdo->prepare("SELECT d.*, u.email FROM doctor d JOIN user u ON d.user_id = u.user_id WHERE d.doctor_id = ?");
+                        $stmt->execute([$doctor_id]);
+                        $doctor = $stmt->fetch(PDO::FETCH_ASSOC);
+                    } else {
+                        $error = "Failed to upload profile picture.";
+                    }
+                } else {
+                    $error = "File size too large. Maximum size is 2MB.";
+                }
+            } else {
+                $error = "Invalid file type. Only JPG, JPEG, PNG, and GIF files are allowed.";
+            }
+        } else {
+            $error = "Please select a valid image file.";
+        }
     }
     
     // Refresh doctor data
@@ -114,15 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 $stmt = $pdo->prepare("SELECT * FROM doctor_availability WHERE doctor_id = ? ORDER BY FIELD(day_of_week, 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday')");
 $stmt->execute([$doctor_id]);
 $weekly_availability = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-// Parse notification preferences
-$notification_prefs = $doctor['notification_preferences'] ? json_decode($doctor['notification_preferences'], true) : [
-    'email' => 1,
-    'sms' => 1,
-    'appointment_reminders' => 1
-];
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -472,6 +467,64 @@ $notification_prefs = $doctor['notification_preferences'] ? json_decode($doctor[
         footer p {
             color: white;
         }
+
+        /* Photo Upload Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 24px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 {
+            color: #4d93c2ff;
+            margin: 0;
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: #000;
+        }
+
+        .photo-preview {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .photo-preview img {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 8px;
+            border: 2px solid #ddd;
+        }
         
         /* Responsive Design */
         @media (max-width: 768px) {
@@ -555,8 +608,8 @@ $notification_prefs = $doctor['notification_preferences'] ? json_decode($doctor[
             <!-- Sidebar with Personal Info -->
             <div class="profile-sidebar">
                 <div class="profile-photo">
-                    <img src="<?php echo htmlspecialchars($doctor['profile_picture'] ?? 'default_doctor_avatar.jpg'); ?>" alt="Doctor Profile Photo">
-                    <button class="btn-change-photo">Change Photo</button>
+                    <img src="<?php echo htmlspecialchars($doctor['profile_picture'] ?? 'default_doctor_avatar.jpg'); ?>" alt="Doctor Profile Photo" id="current-profile-pic">
+                    <button class="btn-change-photo" onclick="openPhotoModal()">Change Photo</button>
                 </div>
                 <div class="personal-info">
                     <div class="info-item">
@@ -655,51 +708,6 @@ $notification_prefs = $doctor['notification_preferences'] ? json_decode($doctor[
                         </div>
                         <button type="submit" class="btn-primary">Update Password</button>
                     </form>
-                    
-                    <form method="POST" style="margin-top: 24px;">
-                        <input type="hidden" name="update_notifications" value="1">
-                        <h3>Notification Preferences</h3>
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="email-notifications" name="email_notifications" <?php echo $notification_prefs['email'] ? 'checked' : ''; ?>>
-                            <label for="email-notifications">Email Notifications</label>
-                        </div>
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="sms-notifications" name="sms_notifications" <?php echo $notification_prefs['sms'] ? 'checked' : ''; ?>>
-                            <label for="sms-notifications">SMS Notifications</label>
-                        </div>
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="appointment-reminders" name="appointment_reminders" <?php echo $notification_prefs['appointment_reminders'] ? 'checked' : ''; ?>>
-                            <label for="appointment-reminders">Appointment Reminders</label>
-                        </div>
-                        <button type="submit" class="btn-primary">Save Preferences</button>
-                    </form>
-                </section>
-
-                <!-- Emergency Contact -->
-                <section class="section-card">
-                    <h2>Emergency Contact</h2>
-                    <form method="POST">
-                        <input type="hidden" name="update_emergency_contact" value="1">
-                        <div class="info-grid">
-                            <div class="form-group">
-                                <label for="emergency_contact_name">Contact Person:</label>
-                                <input type="text" id="emergency_contact_name" name="emergency_contact_name" value="<?php echo htmlspecialchars($doctor['emergency_contact_name'] ?? ''); ?>" placeholder="Full name">
-                            </div>
-                            <div class="form-group">
-                                <label for="emergency_contact_relationship">Relationship:</label>
-                                <input type="text" id="emergency_contact_relationship" name="emergency_contact_relationship" value="<?php echo htmlspecialchars($doctor['emergency_contact_relationship'] ?? ''); ?>" placeholder="Spouse, Parent, etc.">
-                            </div>
-                            <div class="form-group">
-                                <label for="emergency_contact_phone">Phone Number:</label>
-                                <input type="text" id="emergency_contact_phone" name="emergency_contact_phone" value="<?php echo htmlspecialchars($doctor['emergency_contact_phone'] ?? ''); ?>" placeholder="+6012-345-6789">
-                            </div>
-                            <div class="form-group">
-                                <label for="emergency_contact_email">Email:</label>
-                                <input type="email" id="emergency_contact_email" name="emergency_contact_email" value="<?php echo htmlspecialchars($doctor['emergency_contact_email'] ?? ''); ?>" placeholder="email@example.com">
-                            </div>
-                        </div>
-                        <button type="submit" class="btn-primary">Update Emergency Contact</button>
-                    </form>
                 </section>
 
                 <!-- Action Buttons -->
@@ -713,6 +721,30 @@ $notification_prefs = $doctor['notification_preferences'] ? json_decode($doctor[
             </div>
         </div>
     </main>
+
+    <!-- Photo Upload Modal -->
+    <div id="photoModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Change Profile Photo</h3>
+                <span class="close" onclick="closePhotoModal()">&times;</span>
+            </div>
+            <form method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="update_photo" value="1">
+                <div class="form-group">
+                    <label for="profile_picture">Select New Photo:</label>
+                    <input type="file" id="profile_picture" name="profile_picture" accept="image/*" onchange="previewPhoto(this)">
+                </div>
+                <div class="photo-preview">
+                    <img id="photoPreview" src="#" alt="Photo Preview" style="display: none;">
+                </div>
+                <div class="action-buttons">
+                    <button type="button" class="btn-secondary" onclick="closePhotoModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Upload Photo</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <footer>
         <div class="footer-container">
@@ -737,6 +769,38 @@ $notification_prefs = $doctor['notification_preferences'] ? json_decode($doctor[
                 });
             }
         });
+
+        // Photo Upload Modal Functions
+        function openPhotoModal() {
+            document.getElementById('photoModal').style.display = 'block';
+        }
+
+        function closePhotoModal() {
+            document.getElementById('photoModal').style.display = 'none';
+            // Reset preview and form
+            document.getElementById('photoPreview').style.display = 'none';
+            document.getElementById('profile_picture').value = '';
+        }
+
+        function previewPhoto(input) {
+            const preview = document.getElementById('photoPreview');
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('photoModal');
+            if (event.target == modal) {
+                closePhotoModal();
+            }
+        }
     </script>
 </body>
 </html>
