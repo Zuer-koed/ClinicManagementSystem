@@ -44,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['available_date'])) {
     $available_date = $_POST['available_date'];
     $start_time = $_POST['start_time'];
     $end_time = $_POST['end_time'];
+    $max_appointment = $_POST['max_appointment'] ?? 10; // Default to 10 if not set
     $repeat_weekly = isset($_POST['repeat_weekly']) ? 1 : 0;
     
     if ($repeat_weekly) {
@@ -51,18 +52,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['available_date'])) {
         $day_of_week = strtolower(date('l', strtotime($available_date)));
         
         $stmt = $pdo->prepare("
-            INSERT INTO doctor_availability (doctor_id, day_of_week, start_time, end_time) 
-            VALUES (?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE start_time = VALUES(start_time), end_time = VALUES(end_time)
+            INSERT INTO doctor_availability (doctor_id, day_of_week, start_time, end_time, max_appointment) 
+            VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE start_time = VALUES(start_time), end_time = VALUES(end_time), max_appointment = VALUES(max_appointment)
         ");
-        $stmt->execute([$doctor_id, $day_of_week, $start_time, $end_time]);
+        $stmt->execute([$doctor_id, $day_of_week, $start_time, $end_time, $max_appointment]);
     } else {
         // Add to doctor_schedule table for specific date
         $stmt = $pdo->prepare("
-            INSERT INTO doctor_schedule (doctor_id, date, start_time, end_time, is_available) 
-            VALUES (?, ?, ?, ?, 1)
+            INSERT INTO doctor_schedule (doctor_id, date, start_time, end_time, max_appointment, is_available) 
+            VALUES (?, ?, ?, ?, ?, 1)
         ");
-        $stmt->execute([$doctor_id, $available_date, $start_time, $end_time]);
+        $stmt->execute([$doctor_id, $available_date, $start_time, $end_time, $max_appointment]);
     }
     
     header('Location: doctor_calendar.php?success=1&view=' . $view_type . '&date=' . $current_date);
@@ -1030,34 +1031,56 @@ $specific_schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
             
             <div class="availability-form">
-                <h2>Set Your Availability</h2>
-                <?php if (isset($_GET['success'])): ?>
-                    <div class="success-message">
-                        <i class="fas fa-check-circle"></i> Availability updated successfully!
-                    </div>
-                <?php endif; ?>
-                <form action="" method="post">
-                    <input type="hidden" name="view" value="<?php echo $view_type; ?>">
-                    <input type="hidden" name="date" value="<?php echo $current_date; ?>">
-                    <div class="form-group">
-                        <label for="available-date">Date:</label>
-                        <input type="date" id="available-date" name="available_date" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="start-time">Start Time:</label>
-                        <input type="time" id="start-time" name="start_time" value="09:00" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="end-time">End Time:</label>
-                        <input type="time" id="end-time" name="end_time" value="17:00" required>
-                    </div>
-                    <div class="form-group checkbox-group">
-                        <input type="checkbox" id="repeat-weekly" name="repeat_weekly">
-                        <label for="repeat-weekly">Repeat this time slot weekly</label>
-                    </div>
-                    <button type="submit" class="btn-primary">Add to My Available Schedule</button>
-                </form>
-            </div>
+            <h2>Set Your Availability</h2>
+            <?php if (isset($_GET['success'])): ?>
+                <div class="success-message">
+                    <i class="fas fa-check-circle"></i> Availability updated successfully!
+                </div>
+            <?php endif; ?>
+            <form action="" method="post">
+                <input type="hidden" name="view" value="<?php echo $view_type; ?>">
+                <input type="hidden" name="date" value="<?php echo $current_date; ?>">
+                
+                <div class="form-group">
+                    <label for="available-date">Date:</label>
+                    <input type="date" id="available-date" name="available_date" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="start-time">Start Time:</label>
+                    <input type="time" id="start-time" name="start_time" value="09:00" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="end-time">End Time:</label>
+                    <input type="time" id="end-time" name="end_time" value="17:00" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="max-appointments">Maximum Appointments (per day):</label>
+                    <select id="max-appointments" name="max_appointment" class="form-control">
+                        <option value="5">5 appointments</option>
+                        <option value="10" selected>10 appointments</option>
+                        <option value="15">15 appointments</option>
+                        <option value="20">20 appointments</option>
+                        <option value="25">25 appointments</option>
+                        <option value="30">30 appointments</option>
+                        <option value="40">40 appointments</option>
+                        <option value="50">50 appointments</option>
+                        <option value="0">No limit</option>
+                    </select>
+                    <small style="color: #666; font-size: 12px; display: block; margin-top: 5px;">
+                        Maximum number of appointments you can accept for this day
+                    </small>
+                </div>
+                
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="repeat-weekly" name="repeat_weekly">
+                    <label for="repeat-weekly">Repeat this time slot weekly</label>
+                </div>
+                
+                <button type="submit" class="btn-primary">Add to My Available Schedule</button>
+            </form>
         </div>
 
         <section class="appointments-section">
