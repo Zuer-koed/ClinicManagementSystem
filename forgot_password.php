@@ -2,57 +2,39 @@
 session_start();
 require_once 'db_connection.php';
 
-if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
-    header("Location: login.php?error=please_login");
-    exit();
-}
-
-if ($_SESSION['role'] !== 'patient') {
-    header("Location: login.php?error=unauthorized");
-    exit();
-}
-
-$user_id = $_SESSION['user_id'];
 $error   = "";
 $success = false;
 
-try {
-    $stmt = $pdo->prepare("SELECT email, password_hash FROM user WHERE user_id = ?");
-    $stmt->execute([$user_id]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if (!$user) {
-        die("User not found.");
-    }
-} catch (PDOException $e) {
-    error_log("DB error in change_password: " . $e->getMessage());
-    die("Error loading data. Please try again later.");
-}
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $current_password = $_POST['current_password'] ?? '';
+    $email            = trim($_POST['email'] ?? '');
     $new_password     = $_POST['new_password'] ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
 
-    if ($current_password === '' || $new_password === '' || $confirm_password === '') {
-        $error = "Please fill in all password fields.";
+    if ($email === '' || $new_password === '' || $confirm_password === '') {
+        $error = "Please fill in all fields.";
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $error = "Please enter a valid email address.";
     } elseif ($new_password !== $confirm_password) {
         $error = "New password and confirm password do not match.";
     } elseif (strlen($new_password) < 8) {
         $error = "New password should be at least 8 characters.";
     } else {
-        if (!password_verify($current_password, $user['password_hash'])) {
-            $error = "Current password is incorrect.";
-        } else {
-            try {
+        try {
+            $stmt = $pdo->prepare("SELECT user_id FROM user WHERE email = ? AND is_active = 1");
+            $stmt->execute([$email]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$user) {
+                $error = "No active account found with that email.";
+            } else {
                 $new_hash = password_hash($new_password, PASSWORD_DEFAULT);
                 $upd = $pdo->prepare("UPDATE user SET password_hash = ? WHERE user_id = ?");
-                $upd->execute([$new_hash, $user_id]);
+                $upd->execute([$new_hash, $user['user_id']]);
                 $success = true;
-            } catch (PDOException $e) {
-                error_log("DB error updating password: " . $e->getMessage());
-                $error = "Error updating password. Please try again.";
             }
+        } catch (PDOException $e) {
+            error_log("DB error in forgot_password: " . $e->getMessage());
+            $error = "Error updating password. Please try again later.";
         }
     }
 }
@@ -62,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NexusCare - Change Password</title>
+    <title>NexusCare - Forgot Password</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 
@@ -178,22 +160,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(77, 147, 194, 0.2);
         }
-
-        input[readonly] {
-            background-color: #f5f5f5;
-            cursor: not-allowed;
-        }
-        
-        .password-toggle {
-            position: absolute;
-            right: 1rem;
-            top: 50%;
-            transform: translateY(-50%);
-            background: none;
-            border: none;
-            color: var(--gray);
-            cursor: pointer;
-        }
         
         .login-btn {
             width: 100%;
@@ -222,7 +188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             transform: translateY(0);
         }
         
-        .back-profile {
+        .back-login {
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
@@ -237,8 +203,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             width: 100%;
         }
         
-        .back-profile:hover {
+        .back-login:hover {
             background-color: var(--primary-light);
+        }
+        
+        footer {
+            background-color: var(--secondary);
+            color: var(--white);
+            text-align: center;
+            padding: 1.5rem 0;
+        }
+        
+        .footer-container {
+            max-width: 450px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        
+        footer p {
+            color: var(--white);
+            margin: 0;
         }
 
         .password-strength {
@@ -274,6 +258,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             background-color: #28a745;
             width: 100%;
         }
+        
+        @media (max-width: 768px) {
+            .login-container {
+                padding: 2rem 1.5rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 1.5rem 1rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -282,28 +278,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <section class="login-container">
             <div class="login-header">
                 <img src="Picture/NexusCareLogo_withoutbg.png" alt="NexusCare Logo">
-                <h2>Change Password</h2>
-                <p class="login-subtitle">Update your account password securely</p>
+                <h2>Forgot Password</h2>
+                <p class="login-subtitle">Reset your account password using your email</p>
             </div>
 
             <form action="" method="post">
-
                 <div class="form-group">
-                    <label for="email">Email (read only)</label>
+                    <label for="email">Registered Email</label>
                     <div class="input-with-icon">
                         <i class="fas fa-envelope input-icon"></i>
-                        <input type="email" id="email" value="<?php echo htmlspecialchars($user['email']); ?>" readonly>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="current_password">Current Password</label>
-                    <div class="input-with-icon">
-                        <i class="fas fa-lock input-icon"></i>
-                        <input type="password" id="current_password" name="current_password" required placeholder="Enter your current password">
-                        <button type="button" class="password-toggle" data-target="current_password">
-                            <i class="fas fa-eye"></i>
-                        </button>
+                        <input type="email" id="email" name="email" required placeholder="Enter your registered email"
+                               value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>">
                     </div>
                 </div>
 
@@ -312,11 +297,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="input-with-icon">
                         <i class="fas fa-key input-icon"></i>
                         <input type="password" id="new_password" name="new_password" required placeholder="Enter a new password">
-                        <button type="button" class="password-toggle" data-target="new_password">
-                            <i class="fas fa-eye"></i>
-                        </button>
                     </div>
-
                     <div class="password-strength">
                         <span id="strength-text">Password strength: </span>
                         <div class="strength-bar">
@@ -330,20 +311,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="input-with-icon">
                         <i class="fas fa-key input-icon"></i>
                         <input type="password" id="confirm_password" name="confirm_password" required placeholder="Re-enter the new password">
-                        <button type="button" class="password-toggle" data-target="confirm_password">
-                            <i class="fas fa-eye"></i>
-                        </button>
                     </div>
                 </div>
 
                 <button type="submit" class="login-btn">
-                    <i class="fas fa-save"></i> Update Password
+                    <i class="fas fa-unlock-alt"></i> Reset Password
                 </button>
-
-                <a href="patient_profile.php" class="back-profile">
-                    <i class="fas fa-arrow-left"></i> Back to My Profile
+                
+                <a href="login.php" class="back-login">
+                    <i class="fas fa-arrow-left"></i> Back to Login
                 </a>
-
             </form>
         </section>
     </main>
@@ -354,31 +331,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </footer>
 
-    <!-- SUCCESS MODAL -->
-    <div class="modal fade" id="successModal" tabindex="-1">
+    <div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-success">
                 <div class="modal-header bg-success text-white">
-                    <h5 class="modal-title">Password Updated</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <h5 class="modal-title" id="successModalLabel">Password Reset Successful</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    Your password has been updated successfully.
+                    Your password has been reset successfully.<br>
+                    You can now log in with your new password.
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- ERROR MODAL -->
-    <div class="modal fade" id="errorModal" tabindex="-1">
+    <div class="modal fade" id="errorModal" tabindex="-1" aria-labelledby="errorModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-danger">
                 <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title">Password Update Error</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <h5 class="modal-title" id="errorModalLabel">Password Reset Error</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <?php echo !empty($error) ? htmlspecialchars($error) : "There was a problem updating your password."; ?>
+                    <?php if (!empty($error)): ?>
+                        <?php echo htmlspecialchars($error); ?>
+                    <?php else: ?>
+                        There was a problem resetting your password. Please try again.
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -387,69 +367,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        document.querySelectorAll('.password-toggle').forEach(btn => {
-            btn.addEventListener('click', function () {
-                const targetId = this.getAttribute('data-target');
-                const input = document.getElementById(targetId);
-                const icon  = this.querySelector('i');
-
-                if (input.type === 'password') {
-                    input.type = 'text';
-                    icon.classList.replace('fa-eye', 'fa-eye-slash');
-                } else {
-                    input.type = 'password';
-                    icon.classList.replace('fa-eye-slash', 'fa-eye');
-                }
-            });
-        });
-
         document.addEventListener('DOMContentLoaded', function () {
             <?php if ($success): ?>
-                const successModal = new bootstrap.Modal(document.getElementById('successModal'));
-                successModal.show();
-                setTimeout(() => {
-                    window.location.href = "patient_profile.php";
-                }, 1500);
+                const successModalEl = document.getElementById('successModal');
+                if (successModalEl) {
+                    const successModal = new bootstrap.Modal(successModalEl);
+                    successModal.show();
+                    setTimeout(function () {
+                        window.location.href = 'login.php';
+                    }, 2000);
+                }
             <?php endif; ?>
 
             <?php if (!empty($error)): ?>
-                const errorModal = new bootstrap.Modal(document.getElementById('errorModal'));
-                errorModal.show();
+                const errorModalEl = document.getElementById('errorModal');
+                if (errorModalEl) {
+                    const errorModal = new bootstrap.Modal(errorModalEl);
+                    errorModal.show();
+                }
             <?php endif; ?>
 
             const passwordInput = document.getElementById('new_password');
             const strengthFill = document.getElementById('strength-fill');
             const strengthText = document.getElementById('strength-text');
-
-            passwordInput.addEventListener('input', function () {
-                const password = this.value;
-
-                strengthFill.className = 'strength-fill';
-                strengthText.textContent = 'Password strength: ';
-
-                if (password.length === 0) return;
-
-                let strength = 0;
-
-                if (password.length >= 8) strength++;
-                if (/[a-z]/.test(password)) strength++;
-                if (/[A-Z]/.test(password)) strength++;
-                if (/[0-9]/.test(password)) strength++;
-                if (/[^A-Za-z0-9]/.test(password)) strength++;
-
-                if (strength <= 2) {
-                    strengthFill.classList.add('strength-weak');
-                    strengthText.textContent += 'Weak';
-                } else if (strength <= 4) {
-                    strengthFill.classList.add('strength-medium');
-                    strengthText.textContent += 'Medium';
-                } else {
-                    strengthFill.classList.add('strength-strong');
-                    strengthText.textContent += 'Strong';
-                }
-            });
+            
+            if (passwordInput && strengthFill && strengthText) {
+                passwordInput.addEventListener('input', function() {
+                    const password = this.value;
+                    
+                    strengthFill.className = 'strength-fill';
+                    strengthText.textContent = 'Password strength: ';
+                    
+                    if (password.length === 0) {
+                        return;
+                    }
+                    
+                    let strength = 0;
+                    
+                    if (password.length >= 8) strength++;
+                    if (/[a-z]/.test(password)) strength++;
+                    if (/[A-Z]/.test(password)) strength++;
+                    if (/[0-9]/.test(password)) strength++;
+                    if (/[^A-Za-z0-9]/.test(password)) strength++;
+                    
+                    if (strength <= 2) {
+                        strengthFill.classList.add('strength-weak');
+                        strengthText.textContent += 'Weak';
+                    } else if (strength <= 4) {
+                        strengthFill.classList.add('strength-medium');
+                        strengthText.textContent += 'Medium';
+                    } else {
+                        strengthFill.classList.add('strength-strong');
+                        strengthText.textContent += 'Strong';
+                    }
+                });
+            }
         });
     </script>
-
 </body>
 </html>
