@@ -10,6 +10,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $role = $_POST['role'];
     
     try {
+        // Create database connection
+        $database = new Database();
+        $pdo = $database->getConnection();
+        
         // Check if user exists
         $stmt = $pdo->prepare("SELECT * FROM user WHERE email = ? AND role = ? AND is_active = TRUE");
         $stmt->execute([$email, $role]);
@@ -53,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <title>NexusCare - Login</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* Your existing CSS styles remain the same */
+        /* Your existing CSS styles remain exactly the same */
         :root {
             --primary: #4d93c2;
             --primary-dark: #1d5a8a;

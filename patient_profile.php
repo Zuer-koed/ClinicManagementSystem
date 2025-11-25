@@ -2,6 +2,8 @@
 // Start session and include database connection
 session_start();
 require_once 'db_connection.php';
+$database = new Database();
+$pdo = $database->getConnection();
 
 // Check if user is logged in (you might want to add this)
 if (!isset($_SESSION['user_id'])) {

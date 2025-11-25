@@ -1,6 +1,8 @@
 <?php
 session_start();
 require_once 'db_connection.php';
+$database = new Database();
+$pdo = $database->getConnection();
 
 $error = '';
 $success = '';
